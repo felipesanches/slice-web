@@ -226,6 +226,8 @@ produce them, and between them they are where every number quoted in
 |---|---|
 | `probe-original.py` | When the corpus and the original disagree, what does the original actually do — refuse, accept, or accept and quietly produce something else? |
 | `probe-fonttools.py` | What does fontTools read an axis limit as, what does its instancer produce, and what is really stored in a font's `glyf` and `maxp`? |
+| `probes/probe-output-container.py` | Does the original choose its output container from the extension the user types, as H1 claimed? (No — it uses the input's.) |
+| `probes/probe-outline-tolerance.py` | How far can a saved static instance's coordinates be from what a variation-aware renderer draws at the same location? |
 
 ```sh
 # what the original accepts in one axis cell, and what it does with it
@@ -243,7 +245,16 @@ tests/suite/probe-fonttools.py instance tests/suite/fixtures/out/cff2-vf.otf wgh
 
 # per-glyph bounding boxes, composite-ness, and whether maxp covers the programs
 tests/suite/probe-fonttools.py glyf tests/suite/fixtures/out/composites.ttf
+
+# each input saved under each extension, to see which container really comes out
+tests/suite/probes/probe-output-container.py
+
+# the worst coordinate disagreement between a saved instance and an interpolation
+tests/suite/probes/probe-outline-tolerance.py
 ```
+
+The last two take a path argument but default to the committed test fonts, so the commands
+above are the ones that produced the numbers in `docs/adjudication.md`.
 
 ## The rule this corpus is under
 

@@ -81,6 +81,23 @@ The reference is now `instantiateVariableFont`, compiled and reloaded. Compiling
 the instancer leaves interpolated coordinates as Python floats in memory and rounds only
 when the table is written.
 
+`tests/suite/probes/probe-outline-tolerance.py` measures the gap directly, as the worst
+coordinate disagreement over every point of every glyph between a saved instance and an
+interpolation of the source at the same location:
+
+```
+wght=300,  every axis at an end     coord 0.0000
+wght=653.7                          coord 0.4973
+MONO=0.5 CASL=0.5 wght=500 slnt=-7  coord 0.4998
+MONO=1 wght=300 slnt=-15 CRSV=0     coord 0.0000
+CASL=1 wght=1000 CRSV=1             coord 0.0000
+```
+
+which is the case's own premise, measured: at a corner of the design space the deltas are
+applied undivided and the disagreement is *exactly* nothing, while in the interior it is
+one int16 rounding and never more. Zero tolerance at a corner is not merely satisfiable, it
+is the right requirement — and 0.5 is the right one everywhere else.
+
 Fixed in `5d8c8fa`.
 
 ### An axis extent was compared for exact float equality
@@ -241,6 +258,15 @@ four-member groups in every font menu.
   fontTools 4.62.1, flavor `None`;
 * a `.woff` input saved as `o.ttf` produces a WOFF with a `.ttf` name — verified, flavor
   `woff`, 1628 bytes.
+
+`tests/suite/probes/probe-output-container.py` runs the whole matrix:
+
+```
+Recursive-VF.subset.ttf    -> .woff    result flavor: None    size 2048
+Recursive-VF.subset.woff   -> .ttf     result flavor: woff    size 1628
+Recursive-VF.subset.woff2  -> .ttf     result flavor: woff2   size 1052
+Recursive-VF.subset.ttf    -> .woff2   result flavor: None    size 2048
+```
 
 A desktop font manager asked to install the second will reject it; a web server handed the
 first will serve an uncompressed font with a `.woff` content type. This is the claim the
