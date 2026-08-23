@@ -263,7 +263,7 @@ fn OutlineOptions(state: AppState) -> impl IntoView {
 fn SliceButton(state: AppState) -> impl IntoView {
     let run = move |_| {
         if state.font.with(Option::is_none) {
-            state.status.set("Requires a font".to_string());
+            state.status.set("Requires a font path".to_string());
             return;
         }
 

@@ -185,6 +185,42 @@ rules out the tempting shortcut of unioning the outer-wound contours and subtrac
 inner-wound ones), overlapping rings, same-direction nesting, and a self-intersecting bow
 tie.
 
+## Where it deliberately differs from the original
+
+Everything the original does, this does, and the results are diffed against fontTools to
+prove it. These are the places where it does something *else* on purpose.
+
+**The Bit Flag Editor is prefilled from the font.** The original always starts every
+checkbox unchecked, so leaving the editor alone clears whatever bits the input had. Here
+the boxes show the font's real values, and an untouched editor is a no-op. Bits the
+editor does not expose are preserved either way.
+
+**Name records 16, 17, 21 and 22 are preserved.** The original never reads them into the
+editor, and since a blank optional row means "delete this record", it strips all four
+from every font it touches. Here they are loaded like the rest, so they survive unless
+you clear them.
+
+**An explicit `[default]` in a range is rejected.** The original's regular expression
+accepts `200:700[400]`, parses the default out, and then discards it — producing a font
+that is not what was asked for. Level 4 sub-spacing is not implemented here either, so
+the entry is refused with an explanation instead.
+
+**Contradictory bit combinations are reported.** Setting REGULAR alongside BOLD, or
+letting the two BOLD bits disagree, produces a warning under the editor. The original
+ships whatever you tick.
+
+**Overlap removal on its own is a valid request.** The original refuses any job that does
+not narrow the design space. Removing overlaps changes the font, so it is allowed through.
+
+**There is no save dialog, and no editable path field.** A browser gives neither. The
+output name is derived from the input and the axis settings — `Recursive-VF.ttf` at
+`wght=800` becomes `Recursive-VF-wght800.ttf` — and the container is chosen from a
+dropdown rather than inferred from a filename you type. The original's "the path field
+does not match the loaded font" check exists only because that field is editable, so it
+has nothing to guard here.
+
+**No "Check for Updates".** Reloading the page is the update.
+
 ## What it does not do yet
 
 Stated plainly, because a font tool that is quiet about its gaps is worse than one that
