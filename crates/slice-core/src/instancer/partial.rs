@@ -310,15 +310,22 @@ fn read_tuples(
 
 /// Build a partially instanced font.
 pub fn instantiate_partial(font: &FontRef, plans: &[AxisPlan]) -> Result<Vec<u8>, SliceError> {
-    if font.glyf().is_err() {
-        return Err(SliceError::Unsupported(
-            "Only TrueType outlines (a 'glyf' table) can be instanced at the moment. \
-             This font uses CFF outlines."
-                .into(),
-        ));
-    }
     refuse_unsupported_variation_tables(font)?;
+    if font.glyf().is_ok() {
+        return partial_glyf(font, plans);
+    }
+    if font.cff2().is_ok() {
+        return partial_cff2(font, plans);
+    }
+    Err(SliceError::Unsupported(
+        "This font has CFF 1.0 outlines, which are not variable and which this build \
+         cannot rewrite. Only 'glyf' and 'CFF2' outlines can be instanced."
+            .into(),
+    ))
+}
 
+/// A partial instance of a `glyf` font: rebase every `gvar` tuple onto the new extents.
+fn partial_glyf(font: &FontRef, plans: &[AxisPlan]) -> Result<Vec<u8>, SliceError> {
     let num_glyphs = font.maxp()?.num_glyphs();
 
     // Which input axes survive, and where they land in the output.
@@ -426,18 +433,6 @@ pub fn instantiate_partial(font: &FontRef, plans: &[AxisPlan]) -> Result<Vec<u8>
         .map_err(|e| SliceError::Write(e.to_string()))?;
     out.add_table(&loca)
         .map_err(|e| SliceError::Write(e.to_string()))?;
-    out.add_table(&super::statics::build_hmtx_public(&metrics))
-        .map_err(|e| SliceError::Write(e.to_string()))?;
-
-    let mut head: write_fonts::tables::head::Head = font.head()?.to_owned_table();
-    head.index_to_loc_format = loca_format as i16;
-    out.add_table(&head)
-        .map_err(|e| SliceError::Write(e.to_string()))?;
-
-    let mut hhea: write_fonts::tables::hhea::Hhea = font.hhea()?.to_owned_table();
-    hhea.number_of_h_metrics = super::statics::long_metric_count_public(&metrics) as u16;
-    out.add_table(&hhea)
-        .map_err(|e| SliceError::Write(e.to_string()))?;
 
     if any_variations {
         let gvar = Gvar::new(variations, kept.len() as u16)
@@ -445,6 +440,120 @@ pub fn instantiate_partial(font: &FontRef, plans: &[AxisPlan]) -> Result<Vec<u8>
         out.add_table(&gvar)
             .map_err(|e| SliceError::Write(e.to_string()))?;
     }
+
+    finish_partial(&mut out, font, &metrics, Some(loca_format as i16), plans)
+}
+
+/// A partial instance of a `CFF2` font.
+///
+/// The blends and the CFF2 variation store are re-tented by [`super::cff2`]. What is left
+/// here is `HVAR`, which for CFF2 is not optional the way it is for `glyf`: there are no
+/// phantom points, so `HVAR` is the only place a glyph's advance varies, and dropping it
+/// would leave every weight in the surviving range the same width.
+fn partial_cff2(font: &FontRef, plans: &[AxisPlan]) -> Result<Vec<u8>, SliceError> {
+    let instance = super::cff2::instantiate(font, &super::cff2::Request::Restricted(plans))?;
+
+    let hmtx = font.hmtx()?;
+    let num_glyphs = font.maxp()?.num_glyphs();
+    let mut metrics: Vec<(u16, i16)> = Vec::with_capacity(num_glyphs as usize);
+
+    let rebuilt_hvar = match font.hvar() {
+        Err(_) => None,
+        Ok(hvar) => {
+            let store = hvar
+                .item_variation_store()
+                .map_err(|e| SliceError::Read(format!("the HVAR table is malformed: {e}")))?;
+            let rebuilt = super::varstore::rebuild(&store, plans)?;
+            // Whatever no longer varies is baked into `hmtx`, exactly as fontTools does
+            // for a CFF2 font (`_instantiateVHVAR`, "CFF2 fonts need hmtx/vmtx updated
+            // here").
+            let mapping = hvar.advance_width_mapping().transpose().map_err(|e| {
+                SliceError::Read(format!("the HVAR advance mapping is malformed: {e}"))
+            })?;
+            for gid in 0..num_glyphs {
+                let index = match &mapping {
+                    Some(map) => map.get(u32::from(gid)).map_err(|e| {
+                        SliceError::Read(format!("the HVAR advance mapping is malformed: {e}"))
+                    })?,
+                    // With no mapping the glyph ID is the delta set index, in subtable 0.
+                    None => read_fonts::tables::variations::DeltaSetIndex {
+                        outer: 0,
+                        inner: gid,
+                    },
+                };
+                let delta = rebuilt
+                    .default_deltas
+                    .get(usize::from(index.outer))
+                    .and_then(|row| row.get(usize::from(index.inner)))
+                    .copied()
+                    .unwrap_or(0.0);
+                let gid = GlyphId::new(u32::from(gid));
+                let advance = f64::from(hmtx.advance(gid).unwrap_or(0)) + delta;
+                metrics.push((
+                    ot_round(advance).max(0) as u16,
+                    hmtx.side_bearing(gid).unwrap_or(0),
+                ));
+            }
+            Some((hvar, rebuilt))
+        }
+    };
+    if metrics.is_empty() {
+        for gid in 0..num_glyphs {
+            let gid = GlyphId::new(u32::from(gid));
+            metrics.push((
+                hmtx.advance(gid).unwrap_or(0),
+                hmtx.side_bearing(gid).unwrap_or(0),
+            ));
+        }
+    }
+
+    let mut out = FontBuilder::new();
+    out.add_raw(super::cff2::table::CFF2_TAG, instance.table);
+
+    if let Some((hvar, rebuilt)) = rebuilt_hvar {
+        if let Some(store) = rebuilt.store {
+            // The delta-set index maps are copied across untouched: `varstore::rebuild`
+            // keeps every (outer, inner) address, so everything pointing into the store
+            // still points at the same row.
+            let mut owned: write_fonts::tables::hvar::Hvar = hvar.to_owned_table();
+            owned.item_variation_store = store.into();
+            out.add_table(&owned)
+                .map_err(|e| SliceError::Write(e.to_string()))?;
+        }
+    }
+
+    finish_partial(&mut out, font, &metrics, None, plans)
+}
+
+/// Everything a partial instance needs once its outlines and metrics are settled.
+fn finish_partial<'a>(
+    out: &mut FontBuilder<'a>,
+    font: &FontRef<'a>,
+    metrics: &[(u16, i16)],
+    loca_format: Option<i16>,
+    plans: &[AxisPlan],
+) -> Result<Vec<u8>, SliceError> {
+    out.add_table(&super::statics::build_hmtx_public(metrics))
+        .map_err(|e| SliceError::Write(e.to_string()))?;
+
+    let mut head: write_fonts::tables::head::Head = font.head()?.to_owned_table();
+    if let Some(format) = loca_format {
+        head.index_to_loc_format = format;
+    }
+    out.add_table(&head)
+        .map_err(|e| SliceError::Write(e.to_string()))?;
+
+    let mut hhea: write_fonts::tables::hhea::Hhea = font.hhea()?.to_owned_table();
+    hhea.number_of_h_metrics = super::statics::long_metric_count_public(metrics) as u16;
+    hhea.advance_width_max = write_fonts::types::UfWord::new(
+        metrics
+            .iter()
+            .map(|(advance, _)| *advance)
+            .max()
+            .unwrap_or(0),
+    );
+    out.add_table(&hhea)
+        .map_err(|e| SliceError::Write(e.to_string()))?;
 
     out.add_table(&build_fvar(font, plans)?)
         .map_err(|e| SliceError::Write(e.to_string()))?;
@@ -501,15 +610,17 @@ pub fn instantiate_partial(font: &FontRef, plans: &[AxisPlan]) -> Result<Vec<u8>
         Tag::new(b"cvar"),
         Tag::new(b"STAT"),
         // Dropped: for glyf outlines the advance variation lives in the gvar phantom
-        // points, which have been rebased along with everything else.
+        // points, which have been rebased along with everything else. A CFF2 font has
+        // no phantom points, so `partial_cff2` rebuilds HVAR and adds it above, which
+        // makes the builder already hold it by the time this runs.
         Tag::new(b"HVAR"),
         Tag::new(b"VVAR"),
         // Applied above, then dropped.
         Tag::new(b"MVAR"),
     ];
-    super::statics::copy_remaining_tables(&mut out, font, REPLACED);
+    super::statics::copy_remaining_tables(out, font, REPLACED);
 
-    Ok(out.build())
+    Ok(std::mem::take(out).build())
 }
 
 /// Refuse fonts whose variation data this cannot rewrite.

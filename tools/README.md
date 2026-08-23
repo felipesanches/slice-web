@@ -10,6 +10,7 @@ something that is already in the tree.
 | `browser-smoke.sh` | Does the application start in a real browser and read a font through it? |
 | `browser-slice-test.py` | If someone fills in the editors and presses Slice, do they get the font they asked for? |
 | `compare-with-fonttools.py` | Does slicing a font here give the same font the original Slice would have given? |
+| `compare-cff2-with-fonttools.py` | Does instancing a CFF2 font resolve the same blends into the same charstrings fontTools writes? |
 | `woff2-decoder-eval/` | Which pure-Rust WOFF2 decoder reconstructs an sfnt most faithfully, and which ones still build? (a cargo crate, not a script; see its own README) |
 
 Two more live as cargo examples next to the code they debug, rather than here:
@@ -157,3 +158,33 @@ docstring; both are size rather than behaviour.
 
 It needs network access the first time. Like the other browser and environment scripts,
 it exits 0 with a message when it cannot prepare its environment.
+
+## `compare-cff2-with-fonttools.py`
+
+`compare-with-fonttools.py` compares *drawn outlines*, which is the right check for
+`glyf` and not enough for CFF2. A CFF2 instance can draw correctly today and still be
+wrong: a `blend` left behind in a font whose variation store has been deleted, a
+`vsindex` pointing at a subtable that is no longer there, a Private DICT that lost its
+alignment zones, a region list that no longer matches the deltas in the charstrings. None
+of those move a point until something else reads the font.
+
+So this one reaches inside the table. It disassembles every charstring on both sides and
+prints them next to each other, along with the variation store's regions, each
+subtable's region indices, the Private DICTs, `hmtx` and `fvar`.
+
+```sh
+tools/compare-cff2-with-fonttools.py             # build, compare, print differences
+tools/compare-cff2-with-fonttools.py --verbose   # print the programs even when equal
+```
+
+Six cases on `tests/suite/fixtures/out/cff2-vf.otf`: pinned at 400, 500, 700 and 900, and
+restricted to 400:700 and 400:900. **Every charstring program is byte-identical to
+fontTools 4.62.1's**, in all six. That is a stronger statement than "the outlines agree",
+and it holds because both sides round the same way — fontTools adds `round(defaultDelta)`
+to the base value in `instantiateCFF2`, and `instancer/cff2/charstring.rs` copies that
+down to Python's ties-to-even.
+
+Three differences are allowlisted and explained in the script's docstring: table size
+(fontTools re-specializes the operators, this does not), `STAT` and name records (`slice
+cut` runs the whole pipeline and `instantiateVariableFont` does not), and an `HVAR` whose
+store has no regions left, which fontTools keeps as a shell and this drops.
