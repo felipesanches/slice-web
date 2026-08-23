@@ -166,15 +166,23 @@ fn parse_number(text: &str) -> Option<f64> {
     parse_decimal(text, true)
 }
 
-/// A decimal number with no exponent.
+/// The bound of a range: the same grammar as a pinned value.
 ///
-/// Used for the bounds of a range, whose grammar in the original is a regular
-/// expression with no production for an exponent. Keeping that difference is
-/// deliberate: `300:1e3` in the original matches only `300:1`, sorts to `1:300`, and
-/// collapses the axis away entirely, so the safe reading of an exponent here is that
-/// the user has typed something the range syntax does not cover.
+/// The original's range grammar is a regular expression with no production for an
+/// exponent and none for a leading decimal point, but it is applied with `re.search`, so
+/// rather than refusing what it cannot describe it matches a prefix and reads something
+/// else: `300:1e3` becomes `300:1`, which sorts to `1:300`, clamps to `300:300` and
+/// deletes the weight axis; `.25:1` becomes `25:1`. Neither is a reading of what was
+/// typed.
+///
+/// Both bounds are read here the way fontTools' `parseLimits` reads them, since it is
+/// fontTools' instancer that the result is handed to and a limit string learned from
+/// `fonttools varLib.instancer --help` must not mean something different in this
+/// program. Measured against fontTools 4.62.1: `wght=300:1e3` -> `(300, 1000)` and
+/// `wght=.5:900` -> `(0.5, 900)`. It also matches the pin parser above, so a value does
+/// not change meaning when a colon is typed after it.
 fn parse_range_bound(text: &str) -> Option<f64> {
-    parse_decimal(text, false)
+    parse_decimal(text, true)
 }
 
 fn parse_decimal(text: &str, allow_exponent: bool) -> Option<f64> {
@@ -453,10 +461,29 @@ mod tests {
     }
 
     #[test]
-    fn exponents_are_not_allowed_inside_a_range() {
-        // `300:1e3` reads as a range only if `e` cannot also start an exponent; the
-        // colon form is a pair of plain decimals, so this is a typo, not a range.
-        assert!(parse_axis_limit("300:1e3", "wght").is_err());
+    fn a_range_bound_reads_like_a_pinned_value() {
+        // fontTools' `parseLimits` -- the parser for the instancer this program hands
+        // its plan to -- reads `wght=300:1e3` as (300, 1000) and `wght=.5:900` as
+        // (0.5, 900). Reading them any other way would make a limit string mean one
+        // thing in `fonttools varLib.instancer` and another here.
+        assert_eq!(
+            parse_axis_limit("300:1e3", "wght").unwrap(),
+            AxisLimit::range(300.0, 1000.0)
+        );
+        assert_eq!(
+            parse_axis_limit("3e2:7e2", "wght").unwrap(),
+            AxisLimit::range(300.0, 700.0)
+        );
+        assert_eq!(
+            parse_axis_limit(".25:1", "CRSV").unwrap(),
+            AxisLimit::range(0.25, 1.0)
+        );
+        // What is never acceptable is reading the digits and dropping the rest, which
+        // is what the original's `re.search` does to all three.
+        assert_ne!(
+            parse_axis_limit("300:1e3", "wght").unwrap(),
+            AxisLimit::range(1.0, 300.0)
+        );
     }
 
     #[test]
