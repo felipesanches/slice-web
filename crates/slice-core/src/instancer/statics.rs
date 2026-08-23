@@ -47,14 +47,26 @@ pub fn instantiate_static(
     location: &NormalizedLocation,
     plans: &[super::partial::AxisPlan],
 ) -> Result<Vec<u8>, SliceError> {
-    if font.glyf().is_err() {
-        return Err(SliceError::Unsupported(
-            "Only TrueType outlines (a 'glyf' table) can be instanced at the moment. \
-             This font uses CFF outlines."
-                .into(),
-        ));
+    if font.glyf().is_ok() {
+        return static_glyf(font, location, plans);
     }
+    if font.cff2().is_ok() {
+        return static_cff2(font, location, plans);
+    }
+    Err(SliceError::Unsupported(
+        "This font has CFF 1.0 outlines, which are not variable and which this build \
+         cannot rewrite. Only 'glyf' and 'CFF2' outlines can be instanced."
+            .into(),
+    ))
+}
 
+/// A static instance of a `glyf` font: resolve every point at the location and drop
+/// `gvar` along with the rest of the variation data.
+fn static_glyf(
+    font: &FontRef,
+    location: &NormalizedLocation,
+    plans: &[super::partial::AxisPlan],
+) -> Result<Vec<u8>, SliceError> {
     let num_glyphs = font.maxp()?.num_glyphs();
 
     // Pass one: resolve every glyph's points at the target location, and remember the
@@ -126,18 +138,92 @@ pub fn instantiate_static(
         .map_err(|e| SliceError::Write(e.to_string()))?;
     out.add_table(&loca)
         .map_err(|e| SliceError::Write(e.to_string()))?;
-    out.add_table(&build_hmtx(&metrics))
+
+    finish_static(
+        &mut out,
+        font,
+        &metrics,
+        Some(loca_format as i16),
+        location,
+        plans,
+    )
+}
+
+/// A static instance of a `CFF2` font.
+///
+/// The outlines are handled by [`super::cff2`], which resolves the blends in place and
+/// drops the variation store; what is left here is the metrics, which CFF2 keeps in
+/// `hmtx` and `HVAR` rather than in phantom points. fontTools 4.62.1 does the same and
+/// leaves the result as CFF2 rather than downgrading it to CFF 1.0.
+fn static_cff2(
+    font: &FontRef,
+    location: &NormalizedLocation,
+    plans: &[super::partial::AxisPlan],
+) -> Result<Vec<u8>, SliceError> {
+    let instance = super::cff2::instantiate(font, &super::cff2::Request::Pinned(&location.coords))?;
+
+    // A CFF2 glyph has no phantom points, so the advance comes from `hmtx` plus whatever
+    // `HVAR` says at this location. The side bearing is left alone: fontTools does not
+    // recompute it here either, and the outline's own left edge is not what `hmtx`
+    // records for a CFF font.
+    let hmtx = font.hmtx()?;
+    let hvar = font.hvar().ok();
+    let coords: Vec<write_fonts::types::F2Dot14> = location
+        .coords
+        .iter()
+        .map(|c| write_fonts::types::F2Dot14::from_f32(*c as f32))
+        .collect();
+
+    let num_glyphs = font.maxp()?.num_glyphs();
+    let mut metrics: Vec<(u16, i16)> = Vec::with_capacity(num_glyphs as usize);
+    for gid in 0..num_glyphs {
+        let gid = GlyphId::new(gid as u32);
+        let advance = f64::from(hmtx.advance(gid).unwrap_or(0));
+        let delta = hvar
+            .as_ref()
+            .and_then(|hvar| hvar.advance_width_delta(gid, &coords).ok())
+            .map(|d| d.to_f64())
+            .unwrap_or(0.0);
+        metrics.push((
+            ot_round(advance + delta).max(0) as u16,
+            hmtx.side_bearing(gid).unwrap_or(0),
+        ));
+    }
+
+    let mut out = FontBuilder::new();
+    out.add_raw(super::cff2::table::CFF2_TAG, instance.table);
+
+    finish_static(&mut out, font, &metrics, None, location, plans)
+}
+
+/// Everything a static instance needs once its outlines and metrics are settled.
+///
+/// `loca_format` is `None` for a font whose outlines are not in `glyf`, where `head` has
+/// nothing to say about a `loca` table that does not exist.
+fn finish_static<'a>(
+    out: &mut FontBuilder<'a>,
+    font: &FontRef<'a>,
+    metrics: &[(u16, i16)],
+    loca_format: Option<i16>,
+    location: &NormalizedLocation,
+    plans: &[super::partial::AxisPlan],
+) -> Result<Vec<u8>, SliceError> {
+    out.add_table(&build_hmtx(metrics))
         .map_err(|e| SliceError::Write(e.to_string()))?;
 
-    // head records which loca format we chose.
     let mut head: write_fonts::tables::head::Head = font.head()?.to_owned_table();
-    head.index_to_loc_format = loca_format as i16;
+    if let Some(format) = loca_format {
+        head.index_to_loc_format = format;
+    }
     out.add_table(&head)
         .map_err(|e| SliceError::Write(e.to_string()))?;
 
-    // hhea records how many long metrics hmtx holds.
+    // hhea records how many long metrics hmtx holds, and the widest advance among them.
+    // `finalize` recomputes the rest of hhea from `glyf`, which a CFF font does not have,
+    // so this is the only chance to keep advanceWidthMax honest there.
     let mut hhea: write_fonts::tables::hhea::Hhea = font.hhea()?.to_owned_table();
-    hhea.number_of_h_metrics = long_metric_count(&metrics) as u16;
+    hhea.number_of_h_metrics = long_metric_count(metrics) as u16;
+    hhea.advance_width_max = advance_width_max(metrics);
     out.add_table(&hhea)
         .map_err(|e| SliceError::Write(e.to_string()))?;
 
@@ -153,7 +239,8 @@ pub fn instantiate_static(
     if !adjustments.is_empty() {
         if let Some(hhea_table) = out_hhea_with_mvar(font, &adjustments) {
             let mut hhea = hhea_table;
-            hhea.number_of_h_metrics = long_metric_count(&metrics) as u16;
+            hhea.number_of_h_metrics = long_metric_count(metrics) as u16;
+            hhea.advance_width_max = advance_width_max(metrics);
             out.add_table(&hhea)
                 .map_err(|e| SliceError::Write(e.to_string()))?;
         }
@@ -179,9 +266,20 @@ pub fn instantiate_static(
     }
 
     // Everything else is copied across verbatim, minus the variation tables.
-    copy_remaining_tables(&mut out, font, VARIATION_TABLES);
+    copy_remaining_tables(out, font, VARIATION_TABLES);
 
-    Ok(out.build())
+    Ok(std::mem::take(out).build())
+}
+
+/// The widest advance in `hmtx`, which is what `hhea.advanceWidthMax` reports.
+fn advance_width_max(metrics: &[(u16, i16)]) -> write_fonts::types::UfWord {
+    write_fonts::types::UfWord::new(
+        metrics
+            .iter()
+            .map(|(advance, _)| *advance)
+            .max()
+            .unwrap_or(0),
+    )
 }
 
 /// Copy every table the builder does not already hold, skipping `skip`.

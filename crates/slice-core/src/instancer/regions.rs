@@ -1,6 +1,7 @@
 //! Re-tenting an ItemVariationStore's regions onto a restricted design space.
 //!
-//! `gvar`'s tuple variations and CFF2's blends are the same idea stored twice: a set of
+//! `gvar`'s tuple variations, CFF2's blends and an `HVAR` delta set are the same idea
+//! stored three ways: a set of
 //! regions, and a delta per region. [`crate::solver`] already knows how to move one
 //! region onto a narrower axis, and [`crate::instancer::partial`] uses it on `gvar`. What
 //! is different here is *where the deltas live*. A CFF2 blend keeps them in the
@@ -22,7 +23,7 @@ use std::collections::BTreeMap;
 
 use crate::solver::{rebase_tent, support_scalar, Tent};
 
-use super::super::partial::AxisPlan;
+use super::partial::AxisPlan;
 
 /// A region, as the axes it actually depends on: input axis index to support triple.
 ///
@@ -179,6 +180,59 @@ fn quantized_key(region: &DenseRegion) -> Vec<(i16, i16, i16)> {
         .iter()
         .map(|(start, peak, end)| (bits(*start), bits(*peak), bits(*end)))
         .collect()
+}
+
+/// The region list an output ItemVariationStore needs, built by interning regions.
+///
+/// Each ItemVariationData is re-tented on its own and comes back with its own list of
+/// regions, but the store has one shared list that the subtables index into. Interning
+/// is what merges them, and it has to compare at F2Dot14 precision because that is what
+/// the file stores.
+#[derive(Default)]
+pub struct RegionList {
+    regions: Vec<DenseRegion>,
+    seen: BTreeMap<Vec<(i16, i16, i16)>, u16>,
+}
+
+impl RegionList {
+    /// The index of `region` in the list, adding it if it is not already there.
+    pub fn intern(&mut self, region: &DenseRegion) -> u16 {
+        let next = self.regions.len() as u16;
+        *self.seen.entry(quantized_key(region)).or_insert_with(|| {
+            self.regions.push(region.clone());
+            next
+        })
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.regions.is_empty()
+    }
+
+    /// The list in the form write-fonts wants.
+    pub fn into_written(
+        self,
+        axis_count: u16,
+    ) -> write_fonts::tables::variations::VariationRegionList {
+        use write_fonts::tables::variations as wvar;
+        use write_fonts::types::F2Dot14;
+        let regions = self
+            .regions
+            .into_iter()
+            .map(|region| {
+                wvar::VariationRegion::new(
+                    region
+                        .into_iter()
+                        .map(|(start, peak, end)| wvar::RegionAxisCoordinates {
+                            start_coord: F2Dot14::from_f32(start as f32),
+                            peak_coord: F2Dot14::from_f32(peak as f32),
+                            end_coord: F2Dot14::from_f32(end as f32),
+                        })
+                        .collect(),
+                )
+            })
+            .collect();
+        wvar::VariationRegionList::new(axis_count, regions)
+    }
 }
 
 /// Apply every axis's limit to one region, which may drop it, keep it, or split it.

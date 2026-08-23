@@ -23,19 +23,15 @@
 
 pub mod charstring;
 pub mod num;
-pub mod regions;
 pub mod table;
-
-use std::collections::BTreeMap;
 
 use read_fonts::tables::variations::ItemVariationStore;
 use read_fonts::{FontData, FontRead, FontRef};
 use write_fonts::tables::variations as wvar;
-use write_fonts::types::F2Dot14;
 
 use super::partial::AxisPlan;
+use super::regions::{self, Region, RegionRemap};
 use crate::SliceError;
-use regions::{Region, RegionRemap};
 
 /// What is to become of the design space.
 pub enum Request<'a> {
@@ -216,47 +212,22 @@ fn build_var_store(
     }
 
     let axis_count = plans.iter().filter(|plan| !plan.is_pinned()).count() as u16;
-    let mut regions: Vec<wvar::VariationRegion> = Vec::new();
-    let mut seen: BTreeMap<Vec<(i16, i16, i16)>, u16> = BTreeMap::new();
-    let mut indexes: Vec<Vec<u16>> = Vec::with_capacity(remaps.len());
-
-    for remap in remaps {
-        let mut row = Vec::with_capacity(remap.new_region_count());
-        for region in &remap.regions {
-            let axes: Vec<wvar::RegionAxisCoordinates> = region
-                .iter()
-                .map(|(start, peak, end)| wvar::RegionAxisCoordinates {
-                    start_coord: F2Dot14::from_f32(*start as f32),
-                    peak_coord: F2Dot14::from_f32(*peak as f32),
-                    end_coord: F2Dot14::from_f32(*end as f32),
-                })
-                .collect();
-            let key: Vec<(i16, i16, i16)> = axes
-                .iter()
-                .map(|a| {
-                    (
-                        a.start_coord.to_bits(),
-                        a.peak_coord.to_bits(),
-                        a.end_coord.to_bits(),
-                    )
-                })
-                .collect();
-            let index = *seen.entry(key).or_insert_with(|| {
-                regions.push(wvar::VariationRegion::new(axes));
-                (regions.len() - 1) as u16
-            });
-            row.push(index);
-        }
-        indexes.push(row);
-    }
-
-    let data: Vec<Option<wvar::ItemVariationData>> = indexes
+    let mut list = regions::RegionList::default();
+    let data: Vec<Option<wvar::ItemVariationData>> = remaps
         .iter()
-        .map(|row| Some(wvar::ItemVariationData::new(0, 0, row.clone(), Vec::new())))
+        .map(|remap| {
+            let indexes = remap
+                .regions
+                .iter()
+                .map(|region| list.intern(region))
+                .collect();
+            // itemCount and wordDeltaCount are both zero: a CFF2 store holds no deltas
+            // of its own, only the regions its charstrings' blends are stated against.
+            Some(wvar::ItemVariationData::new(0, 0, indexes, Vec::new()))
+        })
         .collect();
 
-    let store =
-        wvar::ItemVariationStore::new(wvar::VariationRegionList::new(axis_count, regions), data);
+    let store = wvar::ItemVariationStore::new(list.into_written(axis_count), data);
     let bytes = write_fonts::dump_table(&store)
         .map_err(|e| SliceError::Write(format!("could not write the CFF2 variation store: {e}")))?;
     Ok(Some(bytes))

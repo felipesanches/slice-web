@@ -16,8 +16,8 @@
 //! same thing for the same reason — `instantiateCFF2` opens with `cff.desubroutinize()`.
 
 use super::num::{read_charstring_number, write_charstring_number, MAX_DEPTH};
-use super::regions::RegionRemap;
 use crate::instancer::glyphs::ot_round;
+use crate::instancer::regions::RegionRemap;
 use crate::SliceError;
 
 /// Type 2 operators this rewriter treats specially. Everything else is copied through.
@@ -356,7 +356,7 @@ pub fn subr_bias(count: usize) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::instancer::cff2::regions::{pinned_remap, Region, RegionRemap};
+    use crate::instancer::regions::{pinned_remap, Region, RegionRemap};
 
     fn region(tent: (f64, f64, f64)) -> Region {
         [(0usize, tent)].into_iter().collect()

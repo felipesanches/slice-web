@@ -7,7 +7,9 @@ pub mod iup;
 pub mod mvar;
 pub mod normalize;
 pub mod partial;
+pub mod regions;
 pub mod statics;
+pub mod varstore;
 
 pub use feature_vars::instantiate_feature_variations;
 pub use normalize::{normalize_axis, normalize_location, NormalizedLocation};
