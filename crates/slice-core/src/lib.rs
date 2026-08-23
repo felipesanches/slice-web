@@ -17,6 +17,7 @@ pub mod axes;
 pub mod bits;
 pub mod font;
 pub mod instancer;
+pub mod job;
 pub mod names;
 pub mod overlaps;
 pub mod solver;
@@ -27,6 +28,7 @@ pub mod testdata;
 pub use axes::{AxisLimit, AxisSpec};
 pub use bits::BitFlags;
 pub use font::SliceFont;
+pub use job::{OutputFormat, SliceJob, SliceOutput};
 pub use names::NameEdits;
 pub use overlaps::{remove_overlaps, OverlapReport};
 
