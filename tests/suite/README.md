@@ -195,8 +195,10 @@ reader can see exactly what is in them.
 | `overlapping` | deliberate overlaps: two crossing bars, a counter, a counter inside a counter, and a self-intersecting contour |
 | `hinted` | `prep`, `fpgm`, `cvt ` and per-glyph instructions |
 | `gdef-varstore` | variable kerning: `GDEF` item variation store referenced from `GPOS` |
-| `cff2-vf` | CFF2 outlines, to pin down what happens to a font neither program claims to support |
+| `cff2-vf` | CFF2 outlines with an ItemVariationStore, for the CFF instancing path |
 | `no-avar` | like `two-axis` but without `avar`, so the mapping is pure |
+| `static-ttf` | not a variable font at all: no `fvar`, for the refusal that must come back |
+| `with-dsig` | `two-axis` plus a stub `DSIG`, so the case that requires the signature to be dropped has one to drop |
 | `single-axis-min-default` | default equal to the axis minimum, the shape Recursive's `wght` has |
 
 ## Running it

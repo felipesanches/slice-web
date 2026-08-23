@@ -464,15 +464,12 @@
         "G11"
       ],
       "class": "spec",
-      "rationale": "DSIG is a digital signature over the font's own bytes; instancing rewrites glyf, hmtx, head, maxp, OS/2 and the table directory, so any signature carried over is guaranteed invalid, and the OpenType specification is explicit that the signature covers the whole font file. Shipping an invalid signature is worse than shipping none: Windows treats a broken DSIG as a tampered font. Verified in fontTools 4.62.1: instantiateVariableFont deletes DSIG unconditionally, before it touches anything else. Note that recursive-vf as committed carries no DSIG, so this case is inert until the fixture builder adds a stub DSIG - it should, because this is the only claim it can exercise.",
-      "fixture": "recursive-vf",
+      "rationale": "DSIG is a digital signature over the font's own bytes; instancing rewrites glyf, hmtx, head, maxp, OS/2 and the table directory, so any signature carried over is guaranteed invalid, and the OpenType specification is explicit that the signature covers the whole font file. Shipping an invalid signature is worse than shipping none: Windows treats a broken DSIG as a tampered font. Verified in fontTools 4.62.1, where `instantiateVariableFont` deletes DSIG unconditionally before it touches anything else. The fixture is `with-dsig` rather than `recursive-vf`, which carries no signature and left this case asserting the absence of something that was never there.",
+      "fixture": "with-dsig",
       "input": {
         "axes": {
-          "MONO": "0",
-          "CASL": "0",
           "wght": "400",
-          "slnt": "0",
-          "CRSV": "0.5"
+          "wdth": "100"
         }
       },
       "expect": {

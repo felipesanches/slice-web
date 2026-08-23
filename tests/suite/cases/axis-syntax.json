@@ -1571,6 +1571,25 @@
           }
         ]
       }
+    },
+    {
+      "id": "editor.static-font-is-refused-on-load",
+      "title": "A font with no fvar is refused at load, not silently accepted as a font with no axes",
+      "covers": [
+        "A2"
+      ],
+      "class": "slice-ui",
+      "rationale": "`fvar` is what makes a font variable, and a font without one has no design space to build a sub-space from -- there is nothing the tool could do to it but copy it. The failure mode being guarded against is not a crash but a plausible-looking success: an implementation that treats a missing `fvar` as 'a font with zero axes' presents an empty Axis Editor and then writes out a copy, and the user has no way to tell that from a slice that happened to change nothing. Both programs refuse, and the message must name `fvar` so the reason is discoverable rather than merely stated.",
+      "fixture": "static-ttf",
+      "input": {
+        "axes": {}
+      },
+      "expect": {
+        "outcome": "error",
+        "message_contains": [
+          "fvar"
+        ]
+      }
     }
   ]
 }

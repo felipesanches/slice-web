@@ -59,6 +59,26 @@ AREA_INTROS = {
 }
 
 
+#: Claims a headless corpus cannot reach, and why. These describe the running
+#: application -- menus, dialogs, the status bar, the thread the work happens on -- not
+#: the font that comes out of it, and the corpus drives both programs as libraries with
+#: no display. Listing them as "not covered yet" would imply someone should get round to
+#: it; they are out of scope by construction, and saying which is which is the difference
+#: between an honest coverage report and a misleading one.
+UNTESTABLE_HEADLESS = {
+    "A4": "the status bar text after a successful load",
+    "F4": "the warning when the path field no longer matches the loaded font",
+    "F5": 'the "Canceled" status after dismissing the save dialog',
+    "F6": "that the work runs on a QThreadPool behind a modal progress indicator",
+    "I1": "the File menu and its Ctrl+O accelerator",
+    "I2": "the References menu's specification links",
+    "I3": "the Help menu",
+    "I4": "drag and drop onto the font-path field",
+    "I5": "the version number in the status bar",
+    "I6": "the window dropping its title and logo on a short screen",
+}
+
+
 def load_cases() -> list[dict]:
     cases = []
     for path in sorted((SUITE / "cases").glob("*.json")):
@@ -191,15 +211,30 @@ def render(cases: list[dict]) -> str:
             counts[claim] += 1
     if titles:
         declared = set(titles)
-        missing = sorted(declared - set(counts))
+        uncovered = declared - set(counts)
+        out_of_scope = sorted(uncovered & set(UNTESTABLE_HEADLESS))
+        missing = sorted(uncovered - set(UNTESTABLE_HEADLESS))
+        testable = len(declared) - len(out_of_scope)
         w(f"The behaviour map declares {len(declared)} claims. "
-          f"{len(declared) - len(missing)} of them have at least one case.")
+          f"{len(out_of_scope)} of them describe the running application rather than the "
+          f"font it produces and cannot be reached by a headless corpus; of the "
+          f"{testable} that remain, **{testable - len(missing)} have at least one case**.")
         w("")
         if missing:
-            w("Claims with no case yet:")
+            w("Claims that are testable but have no case yet:")
             w("")
             for claim in missing:
                 w(f"- **{claim}** — {titles.get(claim, '')}")
+            w("")
+        if out_of_scope:
+            w("Claims out of scope for this corpus, and what each one is:")
+            w("")
+            for claim in out_of_scope:
+                w(f"- **{claim}** — {UNTESTABLE_HEADLESS[claim]}")
+            w("")
+            w("Testing these means driving the Qt application through a display, which is a")
+            w("different harness from this one. They are recorded in the behaviour map so")
+            w("that a reimplementation knows they exist, not because the corpus checks them.")
             w("")
     w("| claim | cases | statement |")
     w("|---|---|---|")
