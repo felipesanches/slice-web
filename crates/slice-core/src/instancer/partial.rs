@@ -15,11 +15,13 @@
 //! | table | what happens |
 //! |---|---|
 //! | `glyf` / `gvar` | rebased; tuples that lost all their axes are baked into the outlines |
+//! | `CFF2` | the charstrings' blends and the table's own variation store are re-tented; see [`super::cff2`] |
 //! | `hmtx` | recomputed from the phantom points, as always |
 //! | `fvar` | pinned axes removed, restricted axes narrowed, named instances filtered |
 //! | `avar` | segment maps renormalized onto the new axis extents |
 //! | `STAT` | design axis records for pinned axes removed, axis values re-indexed |
-//! | `HVAR` / `VVAR` | **dropped.** For TrueType outlines this loses nothing: advance widths vary through the phantom points in `gvar`, which are rebased along with everything else, and a renderer falls back to them when `HVAR` is absent. |
+//! | `HVAR` | **dropped** for `glyf`, **rebuilt** for `CFF2`. Dropping it loses nothing on a TrueType font: advance widths vary through the phantom points in `gvar`, which are rebased along with everything else, and a renderer falls back to them when `HVAR` is absent. A CFF2 glyph has no phantom points, so `HVAR` is the only place its advance varies and it has to be re-tented instead. |
+//! | `VVAR` | **dropped.** Vertical metrics are not otherwise handled here; see the README. |
 //! | `MVAR` | applied at the new default and then dropped, so the metrics are right there but no longer vary across whatever range is left. |
 //! | `GDEF` / `GPOS` variation stores | **refused.** Their regions describe the old axis space, so leaving them gives wrong positioning and removing them dangles the indices that point into them. Rather than ship either, a font that has them is rejected with an explanation. |
 
