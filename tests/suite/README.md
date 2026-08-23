@@ -164,7 +164,7 @@ The checker evaluates these against the output font with fontTools. Any check ca
 | `outlines_match_source_at` | `location` (tag→value), `tolerance` (default 1.0) | every glyph drawn from the output at its default matches the **source fixture** drawn at `location` |
 | `outlines_match_source_across` | `locations`, `tolerance` | as above, sampled at several locations, for a still-variable output |
 | `advances_match_source_at` | `location`, `tolerance` | same, for advance widths |
-| `filled_region_matches` | `reference` (`source_at` + location), `tolerance_units` | the set of points inside each glyph is unchanged — the check for overlap removal, where the outline is meant to change but the shape is not |
+| `filled_region_matches` | `reference.source_at` (a location), `tolerance_units` | the set of points inside each glyph is unchanged — the check for overlap removal, where the outline is meant to change but the shape is not |
 | `no_self_intersections` | | no glyph has a contour crossing itself or another |
 | `all_coordinates_finite` | | no coordinate is NaN or infinite |
 | `contour_count` | `glyph`, `equals` | that glyph has this many contours |

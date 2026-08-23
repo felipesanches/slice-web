@@ -29,6 +29,9 @@ use slice_core::SliceFont;
 
 const RECURSIVE_VF: &[u8] = include_bytes!("../../../testdata/fonts/Recursive-VF.subset.ttf");
 
+/// The conformance corpus's CFF2 fixture, so the other outline format is exercised too.
+const CFF2_VF: &[u8] = include_bytes!("../../../tests/suite/fixtures/out/cff2-vf.otf");
+
 /// How far from an edge a sample point must be to count, in font units.
 ///
 /// Covers the quadratic refit tolerance plus a half-unit of coordinate rounding, with
@@ -251,6 +254,99 @@ fn overlap_removal_refuses_a_variable_font() {
     // gvar deltas are indexed by point number, and merging contours renumbers points, so
     // this has to be refused rather than silently producing a corrupt font.
     let error = remove_overlaps(RECURSIVE_VF).unwrap_err();
+    let message = error.to_string();
+    assert!(
+        message.contains("static"),
+        "expected a message about needing a static font, got: {message}"
+    );
+}
+
+/// Pin the CFF2 fixture's only axis.
+fn cff2_instance(weight: f64) -> Vec<u8> {
+    let slice_font = SliceFont::load(CFF2_VF.to_vec()).unwrap();
+    let font = slice_font.font_ref().unwrap();
+    let axes = slice_font.axes().unwrap();
+    let limits = vec![AxisLimit::Pin(weight); axes.len()];
+    let location = normalize_location(&font, &axes, &[weight]);
+    let plans = plan_axes(&font, &axes, &limits);
+    instantiate_static(&font, &location, &plans).unwrap()
+}
+
+#[test]
+fn the_filled_region_survives_overlap_removal_on_cff2() {
+    // The `H` in this fixture has its crossbar overlapping both stems, so merging it is
+    // a real union rather than a no-op. Everything downstream of the union is different
+    // from the glyf path -- the merged cubics go straight into a charstring with no
+    // quadratic refit -- so the invariant has to be checked separately.
+    let instanced = cff2_instance(700.0);
+    let (simplified, report) = remove_overlaps(&instanced).expect("overlap removal should run");
+    println!("{}", report.summary());
+    assert!(report.failed.is_empty(), "{:?}", report.failed);
+    assert!(
+        !report.modified.is_empty(),
+        "the fixture has overlapping contours; a run that changed nothing is not \
+         evidence of anything"
+    );
+
+    let before_font = FontRef::new(&instanced).unwrap();
+    let after_font = FontRef::new(&simplified).expect("the result should parse");
+    assert!(
+        after_font.cff2().is_ok() && after_font.glyf().is_err(),
+        "overlap removal must not change the outline format"
+    );
+
+    let glyph_count = before_font.maxp().unwrap().num_glyphs();
+    let mut mismatches = Vec::new();
+    for gid in 0..glyph_count {
+        let gid = GlyphId::new(gid as u32);
+        let before = contours(&before_font, gid);
+        let after = contours(&after_font, gid);
+        if before.is_empty() && after.is_empty() {
+            continue;
+        }
+        let bounds = before
+            .iter()
+            .map(|p| p.bounding_box())
+            .reduce(|a, b| a.union(b))
+            .unwrap_or_default();
+        if bounds.width() <= 0.0 || bounds.height() <= 0.0 {
+            continue;
+        }
+        const STEPS: i32 = 60;
+        for i in 0..=STEPS {
+            for j in 0..=STEPS {
+                let point = Point::new(
+                    bounds.x0 - 4.0 + (bounds.width() + 8.0) * (i as f64 / STEPS as f64),
+                    bounds.y0 - 4.0 + (bounds.height() + 8.0) * (j as f64 / STEPS as f64),
+                );
+                if filled(&before, point) == filled(&after, point) {
+                    continue;
+                }
+                // CFF keeps fractional coordinates, so the only edge slack here is the
+                // boolean solver's own accuracy rather than a refit plus rounding.
+                if distance_to_outline(&before, point) < 0.5
+                    || distance_to_outline(&after, point) < 0.5
+                {
+                    continue;
+                }
+                mismatches.push((gid.to_u32(), point));
+            }
+        }
+    }
+    assert!(
+        mismatches.is_empty(),
+        "{} sample points changed fill state away from any edge; first few: {:?}",
+        mismatches.len(),
+        &mismatches[..mismatches.len().min(5)]
+    );
+}
+
+#[test]
+fn overlap_removal_refuses_a_variable_cff2_font() {
+    // A CFF2 charstring's blends are stated against the variation store, and merging
+    // contours throws the operators that carry them away. Refusing is the only honest
+    // answer; producing a font with a store nothing indexes is not.
+    let error = remove_overlaps(CFF2_VF).unwrap_err();
     let message = error.to_string();
     assert!(
         message.contains("static"),

@@ -8,20 +8,30 @@
 //! boolean operations, and export badly to formats that assume simple contours.
 //!
 //! The approach follows `fontTools.ttLib.removeOverlaps`: take a glyph's contours,
-//! union them, and write the result back as a simple glyph. fontTools delegates the
-//! union to Skia's path ops via `skia-pathops`, which has no WebAssembly build; here it
-//! is `flo_curves`, which does the same job on Bézier paths in pure Rust.
+//! union them, and write the result back. fontTools delegates the union to Skia's path
+//! ops via `skia-pathops`, which has no WebAssembly build; here it is `flo_curves`, which
+//! does the same job on Bézier paths in pure Rust.
 //!
-//! Two things about this are worth knowing:
+//! Both outline formats are handled, and the difference between them is in the last step
+//! rather than the union: the contours come out of skrifa, which draws `glyf` and `CFF2`
+//! alike, and go back either as a simple glyph or as a charstring.
+//!
+//! Three things about this are worth knowing:
 //!
 //! * TrueType outlines are quadratic, and boolean path arithmetic works in cubics.
 //!   Quadratic to cubic is exact; the way back is an approximation, so a glyph that is
 //!   modified comes back with slightly different curves and more points. Glyphs that do
-//!   not need modifying are therefore left completely alone.
+//!   not need modifying are therefore left completely alone. CFF stores cubics, so there
+//!   is no refit on that path and the merged outline goes back exactly as it came out.
 //! * Removing overlaps invalidates hinting, because the point numbers it refers to no
 //!   longer mean anything. fontTools drops hinting from every glyph when this runs, on
 //!   the grounds that a half-hinted font looks worse than an unhinted one, and this does
-//!   the same.
+//!   the same. For CFF the hints are inside the charstring and go with the redraw; the
+//!   Private DICT's alignment zones and stem widths survive, because they describe the
+//!   design rather than individual points.
+//! * The two formats wind their contours opposite ways -- TrueType runs outer contours
+//!   clockwise, PostScript counter-clockwise -- so the re-winding pass takes which one it
+//!   is aiming for. The fill is the same either way; the convention is not.
 
 use kurbo::{BezPath, CubicBez, ParamCurve, PathEl, Point, Shape};
 use read_fonts::tables::glyf::CurvePoint;
@@ -78,9 +88,12 @@ pub fn remove_overlaps(font_bytes: &[u8]) -> Result<(Vec<u8>, OverlapReport), Sl
     let font = FontRef::new(font_bytes).map_err(|e| SliceError::Read(e.to_string()))?;
 
     if font.glyf().is_err() {
+        if font.cff2().is_ok() {
+            return remove_overlaps_cff2(font_bytes);
+        }
         return Err(SliceError::Unsupported(
-            "Overlap removal currently handles TrueType outlines only; this font uses \
-             CFF outlines."
+            "Overlap removal handles 'glyf' and 'CFF2' outlines; this font has CFF 1.0 \
+             outlines, which this build does not write."
                 .into(),
         ));
     }
@@ -187,6 +200,154 @@ pub fn remove_overlaps(font_bytes: &[u8]) -> Result<(Vec<u8>, OverlapReport), Sl
     Ok((out.build(), report))
 }
 
+/// Merge overlapping contours in a CFF2 font.
+///
+/// This is where CFF gains most: the Type 2 charstring specification says outright that
+/// overlapping subpaths are not permitted, so an instance with them is not merely
+/// awkward downstream, it is outside what the format allows. fontTools takes the same
+/// view and removes overlaps as part of any CFF2-to-CFF downgrade, "as CFF does not
+/// support overlaps but CFF2 does".
+///
+/// Unlike the `glyf` path there is no refit: the boolean arithmetic works in cubics and
+/// CFF stores cubics, so a merged outline goes back exactly as it came out, with
+/// fractional coordinates preserved through the charstring's 16.16 form. What is lost is
+/// the hinting, which lives in the charstrings themselves and cannot survive a redrawn
+/// outline. The Private DICT's alignment zones and stem widths do survive, since they
+/// describe the design rather than individual points.
+fn remove_overlaps_cff2(font_bytes: &[u8]) -> Result<(Vec<u8>, OverlapReport), SliceError> {
+    use crate::instancer::cff2::table;
+
+    let font = FontRef::new(font_bytes).map_err(|e| SliceError::Read(e.to_string()))?;
+    let source = table::read(&font)?;
+    if source.var_store.is_some() {
+        return Err(SliceError::Unsupported(
+            "Overlap removal needs a static font: a CFF2 charstring's blends are stated \
+             against a variation store, and merging contours discards the operators that \
+             carry them. Pin every axis, or turn overlap removal off."
+                .into(),
+        ));
+    }
+
+    let mut report = OverlapReport::default();
+    let mut charstrings: Vec<Vec<u8>> = Vec::with_capacity(source.charstrings.len());
+
+    for (index, original) in source.charstrings.iter().enumerate() {
+        let gid = GlyphId::new(index as u32);
+        // PostScript's convention is the opposite of TrueType's: outer contours run
+        // counter-clockwise.
+        match merged_contours(&font, gid, false) {
+            Ok(Some(paths)) => {
+                report.modified.push(index as u16);
+                charstrings.push(paths_to_charstring(&paths));
+            }
+            Ok(None) => {
+                report.untouched += 1;
+                charstrings.push(original.to_vec());
+            }
+            Err(e) => {
+                report.failed.push((index as u16, e.to_string()));
+                charstrings.push(original.to_vec());
+            }
+        }
+    }
+
+    let builder = table::Cff2Builder {
+        top_dict_extra: table::top_dict_extra(&source.top_dict),
+        global_subrs: source.global_subrs.iter().map(|s| s.to_vec()).collect(),
+        charstrings,
+        var_store: None,
+        fd_select: source.fd_select.map(<[u8]>::to_vec),
+        font_dicts: source
+            .font_dicts
+            .iter()
+            .map(|fd| table::FontDictBuilder {
+                other_entries: fd.other_entries.iter().map(|e| e.raw.clone()).collect(),
+                private: table::private_dict_without_subrs(&fd.private),
+                local_subrs: fd.local_subrs.iter().map(|s| s.to_vec()).collect(),
+            })
+            .collect(),
+    };
+
+    let mut out = FontBuilder::new();
+    out.add_raw(table::CFF2_TAG, builder.build()?);
+    crate::instancer::statics::copy_remaining_tables(&mut out, &font, &[]);
+    Ok((out.build(), report))
+}
+
+/// Write merged contours back out as a CFF2 charstring.
+///
+/// Only the three operators a redrawn outline needs: `rmoveto`, `rlineto` and
+/// `rrcurveto`. CFF2 charstrings carry no width prefix and no `endchar`, so the program
+/// is exactly the path and then stops.
+fn paths_to_charstring(paths: &[BezPath]) -> Vec<u8> {
+    use crate::instancer::cff2::num::write_charstring_number;
+
+    const RMOVETO: u8 = 21;
+    const RLINETO: u8 = 5;
+    const RRCURVETO: u8 = 8;
+
+    let mut out = Vec::new();
+    // Every coordinate in a charstring is relative to the point before it, and a
+    // charstring starts at the origin. Tracking the exact position rather than a rounded
+    // one keeps the error from accumulating along a contour. Note that the point an
+    // `rmoveto` is relative to is the last point *drawn*, not the start of the contour
+    // just closed -- `.notdef` in the `cff2-vf` fixture is built that way.
+    let mut current = Point::ZERO;
+
+    for path in paths {
+        let elements = trim_redundant_close(path);
+        for element in &elements {
+            let (points, op) = match *element {
+                PathEl::MoveTo(p) => (vec![p], RMOVETO),
+                PathEl::LineTo(p) => (vec![p], RLINETO),
+                // CFF has no quadratic operator. Raising a quadratic to a cubic is
+                // exact, so nothing is lost on the way.
+                PathEl::QuadTo(q, p) => {
+                    let cubic = kurbo::QuadBez::new(current, q, p).raise();
+                    (vec![cubic.p1, cubic.p2, cubic.p3], RRCURVETO)
+                }
+                PathEl::CurveTo(c1, c2, p) => (vec![c1, c2, p], RRCURVETO),
+                // A CFF subpath closes implicitly at the next `rmoveto` or at the end of
+                // the program, so there is nothing to write and the current point does
+                // not move.
+                PathEl::ClosePath => continue,
+            };
+            for point in points {
+                write_charstring_number(point.x - current.x, &mut out);
+                write_charstring_number(point.y - current.y, &mut out);
+                current = point;
+            }
+            out.push(op);
+        }
+    }
+    out
+}
+
+/// Drop a final straight segment that only returns to the contour's start.
+///
+/// CFF closes a subpath with exactly that line, so writing it as well leaves a
+/// zero-length segment behind at the join.
+fn trim_redundant_close(path: &BezPath) -> Vec<PathEl> {
+    let mut elements: Vec<PathEl> = path.elements().to_vec();
+    while elements.len() > 2 {
+        let start = match elements.first() {
+            Some(PathEl::MoveTo(p)) => *p,
+            _ => break,
+        };
+        let last = elements[elements.len() - 1];
+        let redundant = match last {
+            PathEl::ClosePath => true,
+            PathEl::LineTo(p) => (p - start).hypot() < 1e-9,
+            _ => false,
+        };
+        if !redundant {
+            break;
+        }
+        elements.pop();
+    }
+    elements
+}
+
 fn read_original(
     loca: &read_fonts::tables::loca::Loca,
     glyf: &read_fonts::tables::glyf::Glyf,
@@ -203,8 +364,16 @@ fn read_original(
     }
 }
 
-/// Simplify one glyph, or report that it did not need it.
-fn simplify_glyph(font: &FontRef, gid: GlyphId) -> Result<Option<WGlyph>, SliceError> {
+/// Merge one glyph's contours, or report that it did not need it.
+///
+/// Format-agnostic: the contours come out of skrifa, which draws `glyf` and `CFF2`
+/// alike, and go back as cubic Bézier paths that either outline format can hold.
+/// `outer_clockwise` is the winding convention the caller's format wants.
+fn merged_contours(
+    font: &FontRef,
+    gid: GlyphId,
+    outer_clockwise: bool,
+) -> Result<Option<Vec<BezPath>>, SliceError> {
     let contours = glyph_contours(font, gid)?;
     if contours.len() < 2 && !any_self_intersection(&contours) {
         // A single contour that does not cross itself has nothing to merge.
@@ -214,7 +383,7 @@ fn simplify_glyph(font: &FontRef, gid: GlyphId) -> Result<Option<WGlyph>, SliceE
         return Ok(None);
     }
 
-    let merged_paths = union_nonzero(&contours);
+    let merged_paths = union_nonzero(&contours, outer_clockwise);
 
     if merged_paths.is_empty() {
         return Err(SliceError::RemoveOverlaps {
@@ -224,11 +393,19 @@ fn simplify_glyph(font: &FontRef, gid: GlyphId) -> Result<Option<WGlyph>, SliceE
     }
 
     // If the merge changed nothing meaningful, keep the original outline rather than
-    // paying for a cubic-to-quadratic refit that would only add points.
+    // paying for a refit that would only add points.
     if same_area(&contours, &merged_paths) && merged_paths.len() == contours.len() {
         return Ok(None);
     }
+    Ok(Some(merged_paths))
+}
 
+/// Simplify one `glyf` glyph, or report that it did not need it.
+fn simplify_glyph(font: &FontRef, gid: GlyphId) -> Result<Option<WGlyph>, SliceError> {
+    // TrueType's convention: outer contours clockwise.
+    let Some(merged_paths) = merged_contours(font, gid, true)? else {
+        return Ok(None);
+    };
     let glyph = paths_to_simple_glyph(&merged_paths).ok_or_else(|| SliceError::RemoveOverlaps {
         glyph: format!("{}", gid.to_u32()),
         reason: "the merged outline could not be written as a simple glyph".into(),
@@ -426,7 +603,7 @@ fn bezpath_to_flo(path: &BezPath) -> SimpleBezierPath {
 ///
 /// A global sign flip would not matter here — `total != 0` is symmetric — so it is
 /// enough that contours which turn opposite ways get opposite signs.
-fn union_nonzero(contours: &[BezPath]) -> Vec<BezPath> {
+fn union_nonzero(contours: &[BezPath], outer_clockwise: bool) -> Vec<BezPath> {
     use flo_curves::bezier::path::{GraphPath, PathLabel};
 
     let flo: Vec<SimpleBezierPath> = contours.iter().map(bezpath_to_flo).collect();
@@ -458,7 +635,7 @@ fn union_nonzero(contours: &[BezPath]) -> Vec<BezPath> {
     graph.heal_exterior_gaps();
 
     let merged: Vec<SimpleBezierPath> = graph.exterior_paths();
-    orient_for_nonzero(merged.iter().map(flo_to_bezpath).collect())
+    orient_for_nonzero(merged.iter().map(flo_to_bezpath).collect(), outer_clockwise)
 }
 
 /// Re-wind merged contours so that the non-zero winding rule fills the right region.
@@ -471,9 +648,13 @@ fn union_nonzero(contours: &[BezPath]) -> Vec<BezPath> {
 ///
 /// Converting between the two is a matter of orientation: a contour nested an even
 /// number of deep is an outer contour, an odd number deep is a hole, and the two must be
-/// wound in opposite directions. TrueType's convention is that outer contours run
-/// clockwise, which in a y-up coordinate system is a negative signed area.
-fn orient_for_nonzero(paths: Vec<BezPath>) -> Vec<BezPath> {
+/// wound in opposite directions. Which way round the pair goes is a convention, and the
+/// two outline formats disagree: TrueType runs outer contours clockwise, PostScript and
+/// therefore CFF runs them counter-clockwise. `outer_clockwise` picks. Fill is unaffected
+/// either way -- the non-zero rule is symmetric under a global flip -- but a font whose
+/// contours run against its format's convention confuses tools that read direction as
+/// meaning, and the hinting engines were written around it.
+fn orient_for_nonzero(paths: Vec<BezPath>, outer_clockwise: bool) -> Vec<BezPath> {
     let probes: Vec<Option<Point>> = paths.iter().map(boundary_point).collect();
 
     paths
@@ -488,7 +669,7 @@ fn orient_for_nonzero(paths: Vec<BezPath>) -> Vec<BezPath> {
                     .filter(|(j, other)| *j != i && other.winding(point) != 0)
                     .count(),
             };
-            let want_clockwise = depth % 2 == 0;
+            let want_clockwise = (depth % 2 == 0) == outer_clockwise;
             // kurbo's signed area is positive for a counter-clockwise contour.
             let is_clockwise = path.area() < 0.0;
             if is_clockwise == want_clockwise {
@@ -744,7 +925,7 @@ mod tests {
     }
 
     fn union(paths: &[BezPath]) -> Vec<BezPath> {
-        union_nonzero(paths)
+        union_nonzero(paths, true)
     }
 
     /// Sample a grid and confirm two path sets fill exactly the same points.

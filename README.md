@@ -58,7 +58,9 @@ keep it. Typing `400:700` on an axis that defaults to 300 is rejected, with the 
 
 Tick **Remove overlapping contours**. It needs every axis pinned — merging contours
 renumbers a glyph's points, and `gvar` deltas are indexed by point number, so the two
-cannot both be true. It also drops hinting, which no longer describes the outlines.
+cannot both be true. (For a CFF2 font the reason is the same shape: the deltas live in
+the charstrings' `blend` operators, which a redrawn outline no longer has.) It also drops
+hinting, which no longer describes the outlines.
 
 ### From the command line
 
@@ -137,6 +139,15 @@ This oracle earned its keep. It found IUP interpolating a tuple's missing deltas
 coordinates that earlier tuples had already moved, and normalized coordinates being
 computed in `f64` when a font stores them as F2Dot14 — neither of which a single-axis
 test would have caught.
+
+**CFF2 is checked twice over.** Its charstrings are rewritten rather than redrawn — the
+`blend` operators are resolved or re-tented in place, so the hints and the subroutine
+structure survive — and there are two independent checks that the rewriting is right.
+`tools/compare-cff2-with-fonttools.py` disassembles the charstrings on both sides and
+compares them program by program: over six requests on the CFF2 fixture, every program is
+**identical** to fontTools 4.62.1's. `cff2_instance_matches_skrifa` then draws them, where
+the largest deviation is 1 unit and is skrifa's own — it quantizes the location to F2Dot14
+and truncates each coordinate, so a value both tools store as 384 draws as 383.998.
 
 **Overlap removal is checked by filled region, not by outline.** The outline is supposed
 to change; what must not change is which points are inside the glyph. Both the before and
@@ -226,8 +237,10 @@ has nothing to guard here.
 Stated plainly, because a font tool that is quiet about its gaps is worse than one that
 has them.
 
-- **CFF outlines.** TrueType (`glyf`) only. A `CFF`/`CFF2` font is refused rather than
-  mangled.
+- **CFF 1.0 outlines.** `glyf` and `CFF2` are both instanced; a plain `CFF ` font is not
+  variable in the first place, and writing one is a second outline format for no gain, so
+  it is refused rather than mangled. A fully pinned CFF2 font stays CFF2, with its blends
+  resolved and its variation store dropped, which is what fontTools does too.
 - **The WOFF2 `glyf` transform, when *writing*.** Reading WOFF2 is complete, transformed
   `glyf`/`loca`/`hmtx` included. Writing it uses the null transform (transformVersion 3)
   that the specification provides for exactly this: the output is a conformant WOFF2 that

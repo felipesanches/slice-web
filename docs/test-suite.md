@@ -1166,7 +1166,7 @@ Converting cubic CFF charstrings to quadratic `glyf` contours is a lossy re-draw
 
 **Restricting an axis on a CFF2 font leaves a variable CFF2 font**
 
-CFF2 carries its variation data in the charstrings' `blend` operators and the table's own ItemVariationStore, so narrowing an axis means rewriting blends and re-tenting the store rather than deleting a `gvar`. An implementation that handles the fully-pinned case by throwing the variation data away will produce a font that is either static when the user asked for variable, or variable with a store that no longer matches its blends. Requiring `fvar` and `CFF2` to both survive, and the outlines to be right at three sampled weights, is what distinguishes real partial instancing from deletion. The fixture is specified with a `wght` axis 100-900 default 400, so 400:700 contains the default as B7 requires.
+CFF2 carries its variation data in the charstrings' `blend` operators and the table's own ItemVariationStore, so narrowing an axis means rewriting blends and re-tenting the store rather than deleting a `gvar`. An implementation that handles the fully-pinned case by throwing the variation data away will produce a font that is either static when the user asked for variable, or variable with a store that no longer matches its blends. Requiring `fvar` and `CFF2` to both survive, and the outlines to be right at three sampled weights, is what distinguishes real partial instancing from deletion. The fixture's `wght` axis is 400/400/900 -- the default sits at the minimum, as it does in Recursive -- so 400:700 contains the default as B7 requires, and the restricted axis comes out 400/400/700.
 
 <sub>covers G2, G13, A3 · authority: `fonttools` · fixture: `cff2-vf`</sub>
 

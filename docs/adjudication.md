@@ -22,11 +22,13 @@ and which are therefore not counted against it:
 | | passed | failed | needs a feature it lacks |
 |---|---|---|---|
 | the original | 229 | 50 | 17 |
-| this implementation | 289 | 7 | 0 |
+| this implementation | 296 | 0 | 0 |
 
-The seven are all CFF: this implementation refuses CFF outlines, and the original,
-delegating to fontTools' `instantiateCFF2`, does not. That is a genuine feature gap here
-and not a defect there, and it is the one place where the original currently scores better.
+An earlier revision of this file recorded seven failures here, all CFF: this
+implementation refused CFF outlines and the original, delegating to fontTools'
+`instantiateCFF2`, did not, which was the one place the original scored better. That gap
+is now closed — CFF2 is instanced rather than refused — and closing it turned up the
+tenth wrong test, below.
 
 Reproduce with:
 
@@ -36,7 +38,7 @@ tests/suite/run.py --verbose          # both
 
 ## Part 1 — tests that were wrong
 
-Nine cases were unpassable, or were measuring something other than what they claimed.
+Ten cases were unpassable, or were measuring something other than what they claimed.
 Every one of them was caught by a *correct* implementation failing it, which is the
 argument for running the corpus against two programs rather than one.
 
@@ -165,6 +167,28 @@ A limit string cannot mean 300-to-1000 in `fonttools varLib.instancer` and be a 
 error here. Both cases keep their subject and change their obligation from "refuse" to
 "read correctly", which is the **stronger** check: each is now built so the two readings
 are distinguishable. Commit `d1d2c0d`.
+
+### `filled_region_matches` drew the reference at the wrong location
+
+Every case using this check writes its reference location as
+`reference.source_at`, which is what `tests/suite/README.md` documents. `checker.py` read
+`reference.location`, found nothing, and fell back to `{}` — so the source was drawn at
+its **default** instance rather than at the location the case named.
+
+That was invisible for four of the five cases: they all use the `overlapping` fixture and
+pin `wght` at 400, which *is* its default, so the two readings coincide. The fifth,
+`cff.remove-overlaps-preserves-filled-region`, pins the `cff2-vf` fixture at wght=700, and
+there the check compared a correctly merged bold outline against an unmerged regular one
+and reported **2019 sampled points as having changed fill state**.
+
+Measured: reading `source_at`, the same output against the same fixture reports **zero**
+mismatched points in all four glyphs, on the checker's own 41 x 37 grid with its own
+half-unit edge margin. The independent Rust check
+`overlap_removal_preserves_shape::the_filled_region_survives_overlap_removal_on_cff2`
+agrees, over a 61 x 61 grid.
+
+Affected `cff.remove-overlaps-preserves-filled-region`; `location` is still accepted as a
+spelling so a case written either way means the same thing.
 
 ## Part 2 — defects in the original
 

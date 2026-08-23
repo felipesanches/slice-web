@@ -818,10 +818,19 @@ class Checker:
         `tolerance_units` of either outline are skipped, because a refitted curve can
         move an edge by a fraction of a unit and the winding right on an edge is not
         defined anyway.
+
+        The reference location is `reference.source_at`, which is what every case in the
+        corpus writes and what the README documents. An earlier version read
+        `reference.location`, found nothing, and drew the source at its *default*. That
+        was invisible for four of the five cases -- they all pin `wght` at 400, which is
+        the `overlapping` fixture's default -- and wrong for the fifth, `cff2-vf` at
+        wght=700, where it compared a merged bold outline against an unmerged regular
+        one and reported 2019 sampled points as having changed.  `location` is still
+        accepted as a spelling so that a case written either way means the same thing.
         """
         margin = float(spec.get("tolerance_units", 1.5))
         reference_spec = spec.get("reference", {})
-        location = reference_spec.get("location", {})
+        location = reference_spec.get("source_at") or reference_spec.get("location", {})
         source_loc = self._location_for(self.source, location)
 
         mismatches = 0

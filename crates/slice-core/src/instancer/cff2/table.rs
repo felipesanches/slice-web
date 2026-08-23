@@ -429,6 +429,22 @@ pub fn top_dict_extra(top_dict: &[DictEntry]) -> Vec<Vec<u8>> {
         .collect()
 }
 
+/// A Private DICT copied through verbatim, minus the `Subrs` offset the writer
+/// recomputes from where it actually puts the local subroutines.
+///
+/// Copying the raw bytes rather than re-encoding keeps binary-coded-decimal reals such
+/// as `BlueScale` exactly as the designer set them.
+pub fn private_dict_without_subrs(entries: &[DictEntry]) -> Vec<u8> {
+    let mut out = Vec::new();
+    for entry in entries {
+        if entry.operator == private::SUBRS {
+            continue;
+        }
+        out.extend_from_slice(&entry.raw);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
