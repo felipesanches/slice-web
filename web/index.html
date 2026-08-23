@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Slice — custom design sub-spaces from variable fonts</title>
+    <meta
+      name="description"
+      content="Build custom design sub-spaces from variable fonts, in the browser. Pin axes, edit name records and bit flags, and merge overlapping contours. Fonts never leave your machine."
+    />
+    <link rel="stylesheet" href="./slice.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M46 14 L6 46' stroke='%23c2410c' stroke-width='4' stroke-linecap='round'/%3E%3Cpath d='M0 0 H48 V20 L8 44 H0 Z' fill='none'/%3E%3Cg clip-path='inset(0 0 0 0)'%3E%3Ccircle cx='24' cy='24' r='17' fill='none' stroke='%23111' stroke-width='7'/%3E%3C/g%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <noscript>
+      <div class="noscript">
+        <h1>Slice</h1>
+        <p>
+          Slice runs entirely in your browser, which means it needs JavaScript and
+          WebAssembly enabled. Nothing is uploaded — that is the reason it works this
+          way.
+        </p>
+      </div>
+    </noscript>
+
+    <div id="boot" class="boot">
+      <p>Loading the engine…</p>
+    </div>
+
+    <script type="module">
+      import init from "./pkg/slice_web.js";
+
+      const boot = document.getElementById("boot");
+      try {
+        await init();
+        boot.remove();
+      } catch (error) {
+        // A failure here is almost always a browser without WebAssembly, or the
+        // .wasm file not being served with the right MIME type. Say so, rather
+        // than leaving a blank page.
+        console.error(error);
+        boot.innerHTML =
+          "<h1>Slice</h1><p>The engine could not start. Slice needs a browser with " +
+          "WebAssembly support.</p><pre></pre>";
+        boot.querySelector("pre").textContent = String(error);
+        boot.classList.add("failed");
+      }
+    </script>
+  </body>
+</html>

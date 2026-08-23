@@ -7,6 +7,7 @@ something that is already in the tree.
 | script | question it answers |
 |---|---|
 | `gen-solver-vectors.py` | Does our sub-space solver agree with fontTools' on every case fontTools tests? |
+| `browser-smoke.sh` | Does the application start in a real browser and read a font through it? |
 
 ## `gen-solver-vectors.py`
 
@@ -29,3 +30,38 @@ tag it came from in its header, so a checkout always says which upstream release
 vectors describe.
 
 As of fontTools 4.62.1 the table holds 32 cases, and all 32 pass.
+
+## `browser-smoke.sh`
+
+`cargo test` runs the engine natively, which is where nearly all the logic lives and
+where it should be tested. What that cannot reach is the part that only exists in a
+browser: whether the WebAssembly module instantiates, whether Leptos mounts, and whether
+a font read through the browser's file APIs actually reaches the three editors.
+
+```sh
+tools/browser-smoke.sh              # build, then check
+tools/browser-smoke.sh --no-build   # check whatever is already in dist/
+PORT=9000 tools/browser-smoke.sh    # if 8931 is taken
+```
+
+It serves `dist/`, opens it with `?sample` (which loads the bundled Recursive test font
+on start), dumps the rendered DOM and asserts what should be in it. It needs `chromium`
+or `chrome` on PATH and skips itself, with exit status 0, when neither is present.
+
+The signals it checks are chosen to fail loudly rather than subtly:
+
+- the loading message has removed itself, which only happens after the module
+  instantiates;
+- the status bar reports `loaded (5 axes)`, so `fvar` was read;
+- `wght` reads `300.0 : 1000.0 [300.0]`, so the extents are right and in the right order;
+- the Name Editor fields carry the font's actual names. This one earns its place: the
+  rows are keyed by nameID and are never rebuilt, so an early version left every field
+  blank on screen while the model behind it was correct. A screenshot showed it; the
+  DOM check now catches it.
+- `OS/2.fsSelection` reads `0000000011000000`, so the bits came from the font rather
+  than starting at zero — including bit 7, which the editor does not expose and must
+  preserve.
+
+Note that input values are asserted through the `value` attribute. Leptos drives inputs
+through the DOM *property*, which a serialised DOM does not show, so the components set
+both; the attribute exists to make the state inspectable from outside.
