@@ -1,0 +1,2522 @@
+{
+  "area": "partial-instancing",
+  "_fixture_assumptions": {
+    "_why": "Every numeric expectation below that concerns `recursive-vf` was measured by running fontTools 4.62.1's instantiateVariableFont over testdata/fonts/Recursive-VF.subset.ttf, saving, and reloading. The remaining fixtures in the roster are not on disk yet, so the cases that use them state here exactly what they assume of them. If fixtures/build.py chooses different numbers, these are the cases to adjust — the assumption is recorded rather than buried in an expectation.",
+    "recursive-vf": "MEASURED, not assumed. fvar order MONO(0/0/1) CASL(0/0/1) wght(300/300/1000) slnt(-15/0/0) CRSV(0/0.5/1); 64 named instances; avar on all five axes; STAT with 5 design axis records and 14 axis values; GSUB 'rvrn' whose base feature has no lookups and whose 11 FeatureVariations records substitute in a lookup mapping a -> a.italic; 3 glyphs (.notdef, a, a.italic). Axis name IDs 269 MONO, 270 CASL, 271 wght, 272 slnt, 273 CRSV. STAT value name IDs 402 Sans, 403 Mono, 404 Linear, 270 Casual (shared with the CASL axis name), 405 Light, 406 Regular, 407 Medium, 408 SemiBold, 409 Bold, 410 ExtraBold, 411 Black, 412 ExtraBlack, 413 Upright, 414 Italic. Instance name IDs 274 'Mono Linear Light', 338 'Sans Linear Light', 340 'Sans Linear Light Italic', 346 'Sans Linear'.",
+    "centred-default": "The roster says one axis, 100 / 400 / 900. Assumed tag `wght`, which is what crates/slice-core/src/instancer/normalize.rs uses for its `centred()` spec. Assumed to have no avar.",
+    "two-axis": "Assumed tags `wght` and `wdth` with `wdth` defaulting to 100. No case here asserts either axis's extents.",
+    "no-avar": "As `two-axis`, and with no avar table.",
+    "single-axis-min-default": "The roster says the shape Recursive's wght has: one axis, tag `wght`, 300 / 300 / 1000.",
+    "named-instances": "Assumed to have a `wdth` axis defaulting to 100 alongside at least one other axis. No case asserts an instance count for it.",
+    "composites": "Assumed to share `two-axis`'s `wght` + `wdth` shape."
+  },
+  "_proposed_checks": [
+    {
+      "kind": "stat_design_axis_tags",
+      "fields": "`equals` — an ordered list of axis tags",
+      "passes_when": "STAT's DesignAxisRecord holds exactly these tags, in this order",
+      "justification": "G5 says STAT's design axis records are kept in full. fontTools 4.62.1 confirms it: instancing Recursive-VF down to wght alone leaves all five records — MONO, CASL, wght, slnt, CRSV — with their AxisOrdering values 0..4 intact, so the AxisIndex fields of the surviving axis values need no renumbering. No listed check can see STAT at all. The cases below reach it indirectly, through the name records its records point at, which is evidence but not the thing itself."
+    },
+    {
+      "kind": "stat_axis_value",
+      "fields": "`axis` (tag), `value` (number), optional `name` (the 3/1/1033 string of its ValueNameID); `not` inverts",
+      "passes_when": "STAT has an axis value record for that axis at that value",
+      "justification": "The other half of G5 — axis values outside the new limits are dropped — is currently testable only by inference: `name_absent` on the ValueNameID works because G10 prunes the name once nothing points at it. That inference breaks the moment a name ID is shared, which already happens in Recursive-VF (nameID 270 is both the CASL axis name and the 'Casual' STAT value name). A direct check would not need the inference."
+    },
+    {
+      "kind": "avar_axis_tags",
+      "fields": "`equals` — an unordered set of axis tags",
+      "passes_when": "the avar table carries a segment map for exactly these axes",
+      "justification": "G3 concerns avar. `has_table`/`no_table` can only say whether avar exists. A pinned axis's segment map must disappear with the axis, or the remaining maps are indexed wrongly, since avar maps are positional against fvar's axis order — a silent, total corruption that `has_table` cannot see."
+    },
+    {
+      "kind": "avar_maps",
+      "fields": "`tag`, `points` — a list of [normalized_in, normalized_out] pairs, `tolerance` (default 1/16384)",
+      "passes_when": "the axis's segment map sends each input to each output",
+      "justification": "Renormalizing avar onto a narrowed extent is the single easiest thing to get wrong here and the corpus should be able to name the answer. Measured for recursive-vf at wght 300:700: the map becomes {-1.0: -1.0, 0.0: 0.0, 0.25006103515625: 0.48614501953125, 0.5: 0.657470703125, 0.75006103515625: 0.8287353515625, 1.0: 1.0}. Today that is only observable through outlines, which conflates an avar error with a gvar error."
+    },
+    {
+      "kind": "named_instance_coords",
+      "fields": "`name` (subfamily name string), `equals` (tag -> value map)",
+      "passes_when": "the named instance with that subfamily name has exactly those coordinates",
+      "justification": "G4 requires more than dropping out-of-range instances: a surviving instance must also lose the coordinates of axes that no longer exist, or its coordinate array no longer lines up with fvar's axis count and the record is unreadable. `named_instances_within_extent` catches an out-of-range value but not a stale extra one."
+    },
+    {
+      "kind": "feature_variation_count",
+      "fields": "`table`, `equals`",
+      "passes_when": "the table's FeatureVariations holds this many records",
+      "justification": "G6 is about which condition sets survive, and the count is the coarsest honest summary of that. It also names a wart found while measuring: when every record dies but some conditioned axis still survives in fvar, fontTools writes a FeatureVariations table with zero records rather than dropping it (Recursive-VF with CASL/slnt pinned and CRSV pinned to its default keeps MONO and wght, and lands there). `no_feature_variations` would fail on that, and the case below deliberately does not assert it; a count check would let the corpus say `equals: 0` and move on."
+    }
+  ],
+  "cases": [
+    {
+      "id": "partial.fvar-holds-only-surviving-axis",
+      "title": "Pinning four of five axes leaves an fvar with just the fifth",
+      "covers": [
+        "B2",
+        "B3",
+        "G2"
+      ],
+      "class": "fonttools",
+      "rationale": "The OpenType fvar table enumerates the axes a font actually varies on; an axis pinned to a single location no longer varies, so leaving its record in fvar would advertise a design space the font cannot render. fontTools 4.62.1 rewrites fvar to the surviving axes only, and every table that indexes axes by position — avar, gvar's tuple regions, the item variation stores — is rewritten against that new list. Verified against the fixture: pinning MONO, CASL, slnt and CRSV leaves exactly one axis record, wght, at its original 300/300/1000.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "has_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "axis_count",
+            "equals": 1
+          },
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "wght"
+            ]
+          },
+          {
+            "kind": "axis_extent",
+            "tag": "wght",
+            "min": 300,
+            "default": 300,
+            "max": 1000
+          },
+          {
+            "kind": "glyph_count",
+            "equals": 3
+          },
+          {
+            "kind": "all_coordinates_finite"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.fvar-narrowed-extent",
+      "title": "A restricted range narrows the surviving axis's fvar extent",
+      "covers": [
+        "B2",
+        "G2"
+      ],
+      "class": "fonttools",
+      "rationale": "This is the whole point of Level 3 sub-spacing: the axis stays, but its declared minimum and maximum shrink to what the user asked for. fvar's minValue and maxValue are what a layout engine clamps user requests against, so if they were left at the original 300/1000 the font would claim weights it no longer carries deltas for. Measured with fontTools 4.62.1: wght becomes 300/300/700, and the default is untouched because a Level 3 slice cannot move it (B7).",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5",
+          "wght": "300:700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_count",
+            "equals": 1
+          },
+          {
+            "kind": "axis_extent",
+            "tag": "wght",
+            "min": 300,
+            "default": 300,
+            "max": 700
+          },
+          {
+            "kind": "has_table",
+            "table": "gvar"
+          },
+          {
+            "kind": "all_coordinates_finite"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.fvar-narrowed-on-two-axes",
+      "title": "Two surviving axes are each narrowed independently",
+      "covers": [
+        "B2",
+        "G2"
+      ],
+      "class": "fonttools",
+      "rationale": "Restricting one axis must not disturb another: each axis's extent is its own, and the sub-spacing solver works axis by axis. If narrowing wght perturbed MONO's record — or vice versa — the design space would no longer be the rectangle the user asked for. Measured: MONO 0/0/0.5 and wght 300/300/700, both surviving, both narrowed exactly as typed.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5",
+          "MONO": "0:0.5",
+          "wght": "300:700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_count",
+            "equals": 2
+          },
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "MONO",
+              "wght"
+            ]
+          },
+          {
+            "kind": "axis_extent",
+            "tag": "MONO",
+            "min": 0,
+            "default": 0,
+            "max": 0.5
+          },
+          {
+            "kind": "axis_extent",
+            "tag": "wght",
+            "min": 300,
+            "default": 300,
+            "max": 700
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.axis-order-preserved-first-and-third",
+      "title": "Surviving axes keep their original fvar order (MONO, wght)",
+      "covers": [
+        "C1",
+        "G2"
+      ],
+      "class": "fonttools",
+      "rationale": "fvar's axis order is not cosmetic: it is the index space that avar segment maps, gvar tuple regions, item variation store regions, named-instance coordinate arrays and GSUB/GPOS condition tables all address axes by. Removing axes must therefore compact the list in place rather than reorder it, and the surviving axes must appear in the order the source font declared them. Recursive-VF declares MONO, CASL, wght, slnt, CRSV; pinning CASL, slnt and CRSV must leave MONO before wght, which is what fontTools produces.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_count",
+            "equals": 2
+          },
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "MONO",
+              "wght"
+            ]
+          },
+          {
+            "kind": "axis_extent",
+            "tag": "MONO",
+            "min": 0,
+            "default": 0,
+            "max": 1
+          },
+          {
+            "kind": "axis_extent",
+            "tag": "wght",
+            "min": 300,
+            "default": 300,
+            "max": 1000
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.axis-order-preserved-first-and-last",
+      "title": "Surviving axes keep their original fvar order (MONO, CRSV)",
+      "covers": [
+        "C1",
+        "G2"
+      ],
+      "class": "fonttools",
+      "rationale": "The companion to the previous case, chosen so that the two survivors are the first and last of the five, with three removed from between them. If a program rebuilt fvar by iterating the user's edits rather than the font's axis list, this is the case that would come out as CRSV, MONO — and every positional reference into fvar would then point at the wrong axis. Measured: fontTools yields MONO then CRSV.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "CASL": "0",
+          "slnt": "0",
+          "wght": "400"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_count",
+            "equals": 2
+          },
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "MONO",
+              "CRSV"
+            ]
+          },
+          {
+            "kind": "axis_extent",
+            "tag": "CRSV",
+            "min": 0,
+            "default": 0.5,
+            "max": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.axis-order-preserved-restricted-plus-whole",
+      "title": "Order holds when one survivor is restricted and the other is left whole",
+      "covers": [
+        "B1",
+        "B2",
+        "C1",
+        "G2"
+      ],
+      "class": "fonttools",
+      "rationale": "B1 says an empty cell leaves an axis alone, and B2 says a cell with a colon restricts it; the two kinds of survivor must end up in the same list, ordered by the source fvar and not by which kind they are. wght is Recursive's third axis and CRSV its fifth, so a correct output declares wght first even though CRSV was the axis the user did not touch. Measured: wght 300/300/700 then CRSV 0/0.5/1.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "wght": "300:700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "wght",
+              "CRSV"
+            ]
+          },
+          {
+            "kind": "axis_extent",
+            "tag": "wght",
+            "min": 300,
+            "default": 300,
+            "max": 700
+          },
+          {
+            "kind": "axis_extent",
+            "tag": "CRSV",
+            "min": 0,
+            "default": 0.5,
+            "max": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.range-equal-to-full-extent-is-a-no-op",
+      "title": "A range identical to the axis's own extent changes nothing",
+      "covers": [
+        "B1",
+        "B2",
+        "G2",
+        "G3",
+        "G4"
+      ],
+      "class": "fonttools",
+      "rationale": "Asking for 300:1000 on an axis that already runs 300 to 1000 is a request the tool must accept — B13 only refuses a job in which every cell is empty, and this cell is not — but it removes nothing from the design space, so nothing may be lost. This is the control case for the whole area: it separates 'the program restricts correctly' from 'the program damages the font whenever it touches it'. Measured: all five axes survive with their original extents, all 64 named instances survive, and avar is still present.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "300:1000"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_count",
+            "equals": 5
+          },
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "MONO",
+              "CASL",
+              "wght",
+              "slnt",
+              "CRSV"
+            ]
+          },
+          {
+            "kind": "axis_extent",
+            "tag": "wght",
+            "min": 300,
+            "default": 300,
+            "max": 1000
+          },
+          {
+            "kind": "named_instance_count",
+            "equals": 64
+          },
+          {
+            "kind": "has_table",
+            "table": "avar"
+          },
+          {
+            "kind": "glyph_count",
+            "equals": 3
+          },
+          {
+            "kind": "outlines_match_source_across",
+            "locations": [
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 300,
+                "slnt": 0,
+                "CRSV": 0.5
+              },
+              {
+                "MONO": 1,
+                "CASL": 1,
+                "wght": 650,
+                "slnt": -15,
+                "CRSV": 1
+              },
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 1000,
+                "slnt": 0,
+                "CRSV": 0
+              }
+            ],
+            "tolerance": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.reversed-range-equals-sorted-range",
+      "title": "700:300 slices the same design space as 300:700",
+      "covers": [
+        "B6",
+        "B2",
+        "G2"
+      ],
+      "class": "slice-ui",
+      "rationale": "B6 records that the range parser sorts its two bounds, so the order they were typed in carries no meaning. That is the defensible reading: a range is a set, and the OpenType axis record has a minValue and a maxValue rather than a first and a second. The expectation here is byte-for-byte the same design space as partial.fvar-narrowed-extent, which is the point — the two inputs must not be distinguishable in the output.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5",
+          "wght": "700:300"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_count",
+            "equals": 1
+          },
+          {
+            "kind": "axis_extent",
+            "tag": "wght",
+            "min": 300,
+            "default": 300,
+            "max": 700
+          },
+          {
+            "kind": "named_instance_count",
+            "equals": 5
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.default-at-top-of-restricted-range",
+      "title": "A range whose maximum is the axis default is accepted (the inclusive boundary)",
+      "covers": [
+        "B7",
+        "G2"
+      ],
+      "class": "fonttools",
+      "rationale": "B7 requires the restricted range to contain the default; containment is inclusive at both ends, and the original's own test is `default < min or default > max`, so a default sitting exactly on the range maximum passes. This is the positive counterpart to the B7 refusals: without it an implementation could satisfy B7 by rejecting every range that does not start at the default. The result is an axis that varies only downward from its default, perfectly expressible in fvar since minValue, defaultValue and maxValue are three independent Fixed values with only min <= default <= max required. Measured with fontTools: CRSV comes out as 0/0.5/0.5 and the font is still variable.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "wght": "400",
+          "CRSV": "0:0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "has_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "axis_count",
+            "equals": 1
+          },
+          {
+            "kind": "axis_extent",
+            "tag": "CRSV",
+            "min": 0,
+            "default": 0.5,
+            "max": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.negative-axis-restricted-range",
+      "title": "An axis that runs entirely below its default restricts correctly",
+      "covers": [
+        "B5",
+        "B7",
+        "G2",
+        "G3"
+      ],
+      "class": "fonttools",
+      "rationale": "Recursive's slnt runs -15 to 0 with the default at 0, so every point on it normalizes to a negative number and the whole axis lives in the lower half of the normalized space. The range regular expression in B5 explicitly admits a leading minus, and restricting to -10:0 must rescale that lower half alone: normalized -1 now means -10 rather than -15. Measured: fvar becomes -10/0/0, and slnt's avar map is rewritten from its original five points to {-1: -1, -0.7020263671875: -0.7025146484375, 0: 0, 1: 1}, which is the original mapping resampled onto the new -10..0 span.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "CRSV": "0.5",
+          "wght": "400",
+          "slnt": "-10:0"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_count",
+            "equals": 1
+          },
+          {
+            "kind": "axis_extent",
+            "tag": "slnt",
+            "min": -10,
+            "default": 0,
+            "max": 0
+          },
+          {
+            "kind": "has_table",
+            "table": "avar"
+          },
+          {
+            "kind": "outlines_match_source_across",
+            "locations": [
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 400,
+                "slnt": 0,
+                "CRSV": 0.5
+              },
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 400,
+                "slnt": -5,
+                "CRSV": 0.5
+              },
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 400,
+                "slnt": -10,
+                "CRSV": 0.5
+              }
+            ],
+            "tolerance": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.degenerate-range-is-a-pin",
+      "title": "A range of zero width behaves as a pin and removes the axis",
+      "covers": [
+        "B2",
+        "B7",
+        "G1",
+        "G2"
+      ],
+      "class": "fonttools",
+      "rationale": "`0:0` parses as a range under B2 and passes B7 because slnt's default is 0, but a range containing exactly one location is not a design space — there is nothing left to interpolate. An fvar record with min = default = max would advertise an axis a renderer can do nothing with, so collapsing it to a pin is the only coherent outcome. Measured: with the other four axes pinned as well, fontTools removes fvar entirely and the output is static, which is the correct reading and worth pinning down because a naive implementation would instead emit a zero-width axis.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "CRSV": "0.5",
+          "wght": "400",
+          "slnt": "0:0"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "no_table",
+            "table": "gvar"
+          },
+          {
+            "kind": "no_table",
+            "table": "avar"
+          },
+          {
+            "kind": "glyph_count",
+            "equals": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.output-is-a-well-formed-variable-font",
+      "title": "A partial slice is a font a renderer can load and vary",
+      "covers": [
+        "G2",
+        "G8",
+        "G13"
+      ],
+      "class": "spec",
+      "rationale": "Everything else in this file checks one field at a time; this case checks that the whole is a font. A variable TrueType font needs fvar and, to vary its outlines, gvar, and the OpenType specification requires head's bounding box, maxp's maxima and hhea's extremes to describe the glyf data actually present. A partial slice rewrites glyf and gvar together, so these summary tables have to be recomputed from the result rather than carried over from the source.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5",
+          "wght": "300:700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "sfnt_flavor",
+            "equals": "truetype"
+          },
+          {
+            "kind": "has_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "has_table",
+            "table": "gvar"
+          },
+          {
+            "kind": "glyph_count",
+            "equals": 3
+          },
+          {
+            "kind": "all_coordinates_finite"
+          },
+          {
+            "kind": "head_bbox_matches_outlines"
+          },
+          {
+            "kind": "maxp_covers_outlines"
+          },
+          {
+            "kind": "hhea_matches_hmtx"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.avar-survives-with-its-axis",
+      "title": "avar is kept when an axis that has a segment map survives",
+      "covers": [
+        "G2",
+        "G3"
+      ],
+      "class": "fonttools",
+      "rationale": "avar's segment maps are what make Recursive's wght axis perceptually even; dropping the table would silently change every interpolated weight, because the normalized coordinate a renderer computes from fvar would no longer be corrected. A partial slice that keeps wght must therefore keep wght's map. Measured: the output still has an avar, carrying the wght map alone once the other four axes are pinned — the pinned axes' maps go with their axes, because avar maps are positional against fvar's axis order.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "has_table",
+            "table": "avar"
+          },
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "wght"
+            ]
+          },
+          {
+            "kind": "outlines_match_source_across",
+            "locations": [
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 300,
+                "slnt": 0,
+                "CRSV": 0.5
+              },
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 500,
+                "slnt": 0,
+                "CRSV": 0.5
+              },
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 1000,
+                "slnt": 0,
+                "CRSV": 0.5
+              }
+            ],
+            "tolerance": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.avar-renormalized-across-restricted-range",
+      "title": "avar is renormalized onto the narrowed extent, so weights still land where they did",
+      "covers": [
+        "G3",
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "After restricting wght to 300:700, the value 700 normalizes to +1 where it used to normalize to about +0.571; if avar's map were carried over unchanged, every weight in the surviving range would be evaluated at the wrong point of the segment map and the outlines would be wrong everywhere except the default. G3 says fontTools rewrites the map, and measurement confirms it: the wght map becomes {-1: -1, 0: 0, 0.25006103515625: 0.48614501953125, 0.5: 0.657470703125, 0.75006103515625: 0.8287353515625, 1: 1}. The observable consequence — and the reason this is checked with outlines rather than table contents — is that the sliced font drawn at wght 550 must match the source drawn at wght 550; measured maximum coordinate deviation across 300, 350, 400, 550 and 700 was 0.5 units, comfortably inside the tolerance.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5",
+          "wght": "300:700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "has_table",
+            "table": "avar"
+          },
+          {
+            "kind": "outlines_match_source_across",
+            "locations": [
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 300,
+                "slnt": 0,
+                "CRSV": 0.5
+              },
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 350,
+                "slnt": 0,
+                "CRSV": 0.5
+              },
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 400,
+                "slnt": 0,
+                "CRSV": 0.5
+              },
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 550,
+                "slnt": 0,
+                "CRSV": 0.5
+              },
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 700,
+                "slnt": 0,
+                "CRSV": 0.5
+              }
+            ],
+            "tolerance": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.no-avar-fixture-does-not-gain-one",
+      "title": "A font without avar does not acquire one",
+      "covers": [
+        "G2",
+        "G3"
+      ],
+      "class": "fonttools",
+      "rationale": "Renormalization is a rewrite of an existing mapping, not the creation of one. A font with no avar has the identity mapping by definition, and the identity resampled onto any sub-range is still the identity, so there is nothing to record; emitting an avar full of identity segments would add bytes and a new opportunity for rounding error for no benefit. The OpenType specification lists avar as optional precisely because the identity case needs no table. Confirmed by construction with fontTools on a purpose-built avar-less single-axis font: no avar appears in the output.",
+      "fixture": "no-avar",
+      "input": {
+        "axes": {
+          "wdth": "100"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "has_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "wght"
+            ]
+          },
+          {
+            "kind": "no_table",
+            "table": "avar"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.no-avar-outlines-across-surviving-range",
+      "title": "Without avar the mapping is pure, and the outlines prove it end to end",
+      "covers": [
+        "G2",
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "This is the control for the avar cases: with no segment map in play, any outline mismatch across the surviving range is a gvar or normalization error rather than an avar error, so the two failure modes can be told apart. The fixture is described in the roster as `two-axis` without avar, so pinning wdth leaves wght varying over its whole declared range. Locations are given as the fixture's declared minimum, default and maximum rather than as literals, since the roster does not fix its extents.",
+      "fixture": "no-avar",
+      "input": {
+        "axes": {
+          "wdth": "100",
+          "wght": "100:900"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "wght"
+            ]
+          },
+          {
+            "kind": "no_table",
+            "table": "avar"
+          },
+          {
+            "kind": "outlines_match_source_across",
+            "locations": [
+              {
+                "wght": 100,
+                "wdth": 100
+              },
+              {
+                "wght": 250,
+                "wdth": 100
+              },
+              {
+                "wght": 400,
+                "wdth": 100
+              },
+              {
+                "wght": 650,
+                "wdth": 100
+              },
+              {
+                "wght": 900,
+                "wdth": 100
+              }
+            ],
+            "tolerance": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.instances-outside-new-space-dropped",
+      "title": "Named instances that fall outside the new design space are removed",
+      "covers": [
+        "G4"
+      ],
+      "class": "fonttools",
+      "rationale": "An fvar named instance is a promise that the font can be rendered at that location. Once an axis is pinned, any instance whose coordinate on that axis differs from the pin cannot be reached, and keeping it would leave a menu entry that resolves to something other than what it names. Recursive's 64 instances all sit at either slnt 0 with CRSV 0.5, or slnt -15 with CRSV 1; pinning slnt to 0 and CRSV to 1 satisfies neither pair, and fontTools drops all 64 — a font with an fvar and no named instances, which is legal and correct.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "1"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "wght"
+            ]
+          },
+          {
+            "kind": "named_instance_count",
+            "equals": 0
+          },
+          {
+            "kind": "named_instances_within_extent"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.instances-inside-kept-with-pinned-coords-removed",
+      "title": "Instances inside the new space survive, carrying only the surviving axes' coordinates",
+      "covers": [
+        "G4",
+        "G2"
+      ],
+      "class": "fonttools",
+      "rationale": "An InstanceRecord's coordinate array is positional: it holds exactly axisCount values, in fvar's axis order. Once four axes are removed, a surviving instance must be rewritten to one value or its record is unreadable — this is a format requirement, not a tidiness one. Measured: pinning MONO 0, CASL 0, slnt 0 and CRSV 0.5 keeps the eight Sans Linear upright weights, each reduced to a single wght coordinate of 300, 400, 500, 600, 700, 800, 900 or 1000.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_count",
+            "equals": 1
+          },
+          {
+            "kind": "named_instance_count",
+            "equals": 8
+          },
+          {
+            "kind": "named_instances_within_extent"
+          },
+          {
+            "kind": "name_present",
+            "id": 338
+          },
+          {
+            "kind": "name_present",
+            "id": 346
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.instances-narrowed-by-restricted-range",
+      "title": "A restricted range drops the instances that fall outside it",
+      "covers": [
+        "G4",
+        "G2"
+      ],
+      "class": "fonttools",
+      "rationale": "The rule is the same for a pin and for a range: an instance survives if and only if its location is inside the new design space on every axis. Restricting wght to 300:700 leaves the Light, Regular, Medium, SemiBold and Bold entries and removes ExtraBold, Black and ExtraBlack, which now sit past the declared maximum. `named_instances_within_extent` is the property that must never be violated — an instance outside its own font's declared range is malformed — and the count pins down that fontTools drops rather than clamps them.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5",
+          "wght": "300:700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "named_instance_count",
+            "equals": 5
+          },
+          {
+            "kind": "named_instances_within_extent"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.instances-not-clamped-to-new-maximum",
+      "title": "An instance past the new maximum is dropped, not moved onto it",
+      "covers": [
+        "G4"
+      ],
+      "class": "fonttools",
+      "rationale": "Restricting wght to 300:650 puts the Bold instance, at 700, outside the range while leaving Light, Regular, Medium and SemiBold inside. Clamping Bold to 650 would produce a font naming a weight it does not have, and would collide with SemiBold's own entry as ranges narrow further; dropping it loses a menu entry but never lies. Measured: four instances remain, and B9's clamping of user-typed *range bounds* does not extend to instance coordinates.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5",
+          "wght": "300:650"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_extent",
+            "tag": "wght",
+            "min": 300,
+            "default": 300,
+            "max": 650
+          },
+          {
+            "kind": "named_instance_count",
+            "equals": 4
+          },
+          {
+            "kind": "named_instances_within_extent"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.instances-across-two-surviving-axes",
+      "title": "With two axes surviving, the instance set is the product that remains reachable",
+      "covers": [
+        "G4"
+      ],
+      "class": "fonttools",
+      "rationale": "Recursive has eight weights times two MONO settings times two CASL settings times two upright/italic pairs. Pinning CASL to 0 and CRSV to 0.5 with slnt at 0 leaves the eight Linear upright weights in each of the two MONO settings, so sixteen instances survive with two coordinates each. This checks that filtering is done per instance against the whole new design space rather than per axis, which would over- or under-count.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "MONO",
+              "wght"
+            ]
+          },
+          {
+            "kind": "named_instance_count",
+            "equals": 16
+          },
+          {
+            "kind": "named_instances_within_extent"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.named-instances-fixture-stays-consistent",
+      "title": "The named-instances fixture comes out with every instance inside its declared extents",
+      "covers": [
+        "G4",
+        "G10"
+      ],
+      "class": "spec",
+      "rationale": "The roster's `named-instances` fixture exists to stress this path with more instances than Recursive's regular grid. Whatever survives, two invariants hold unconditionally: every remaining InstanceRecord must sit inside every declared axis range, because the OpenType specification defines an instance as a position in the font's own design space, and no name record may be left pointing at an instance that no longer exists. No count is asserted here because the roster does not fix how many instances the fixture has.",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wdth": "100"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "has_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "named_instances_within_extent"
+          },
+          {
+            "kind": "no_dangling_name_ids"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.stat-survives-partial-instancing",
+      "title": "STAT is kept when the output is still variable",
+      "covers": [
+        "G5"
+      ],
+      "class": "fonttools",
+      "rationale": "STAT is what lets an operating system place the font inside its family, and the OpenType specification makes it required for variable fonts. A slice that is still variable is still a family member, so removing STAT would leave a conformance hole that no other table fills. G5 says fontTools keeps it, and measurement confirms the table is present in every partial output tried.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5",
+          "wght": "300:700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "has_table",
+            "table": "STAT"
+          },
+          {
+            "kind": "has_table",
+            "table": "fvar"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.stat-keeps-records-for-pinned-axes",
+      "title": "STAT keeps a design axis record for axes the slice removed",
+      "covers": [
+        "G5",
+        "G10"
+      ],
+      "class": "fonttools",
+      "rationale": "This is the claim in G5 worth confirming rather than assuming, and fontTools 4.62.1 does confirm it: slicing Recursive-VF down to wght alone leaves all five STAT design axis records — MONO, CASL, wght, slnt, CRSV — with AxisOrdering 0 to 4 unchanged. It is the right answer, because the sliced font is still a member of the Recursive family and STAT's job is to say where in that family it sits: a Sans Linear Upright slice is distinguished from its Mono and Casual siblings precisely by the axes it no longer varies on. The observable consequence is that the axis name records 269 to 273 all survive even though only 271 is referenced from fvar, so this case reads them as the proxy for the STAT records that point at them; a direct `stat_design_axis_tags` check is proposed above.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5",
+          "wght": "300:700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "has_table",
+            "table": "STAT"
+          },
+          {
+            "kind": "name_present",
+            "id": 269
+          },
+          {
+            "kind": "name_present",
+            "id": 270
+          },
+          {
+            "kind": "name_present",
+            "id": 271
+          },
+          {
+            "kind": "name_present",
+            "id": 272
+          },
+          {
+            "kind": "name_present",
+            "id": 273
+          },
+          {
+            "kind": "no_dangling_name_ids"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.stat-values-outside-restricted-range-dropped",
+      "title": "STAT axis values beyond the new maximum are dropped",
+      "covers": [
+        "G5",
+        "G10"
+      ],
+      "class": "fonttools",
+      "rationale": "A STAT axis value names a point on an axis; once the axis no longer reaches that point, the name describes nothing the font can render and a style-matching engine would offer a style that does not exist. Restricting wght to 300:700 must therefore drop ExtraBold, Black and ExtraBlack while keeping Light through Bold. Measured with fontTools: exactly that, and because G10 then prunes the now-unreferenced name records, the dropped values are observable as the absence of name IDs 410, 411 and 412.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5",
+          "wght": "300:700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_present",
+            "id": 405
+          },
+          {
+            "kind": "name_present",
+            "id": 406
+          },
+          {
+            "kind": "name_present",
+            "id": 409
+          },
+          {
+            "kind": "name_absent",
+            "id": 410
+          },
+          {
+            "kind": "name_absent",
+            "id": 411
+          },
+          {
+            "kind": "name_absent",
+            "id": 412
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.stat-value-exactly-at-new-maximum-is-kept",
+      "title": "A STAT value sitting exactly on the new maximum survives; one just past it does not",
+      "covers": [
+        "G5",
+        "G10"
+      ],
+      "class": "fonttools",
+      "rationale": "The boundary is inclusive, because an axis whose maximum is 650 can be rendered at 650. Bold sits at wght 700: with the range 300:700 it is reachable and kept (name ID 409 present, as the previous case shows), and with 300:650 it is not and is dropped. Testing the two sides of the same boundary is what distinguishes a correct inclusive comparison from an off-by-one, and measurement confirms fontTools drops Bold at 300:650 while keeping SemiBold at 600.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5",
+          "wght": "300:650"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_present",
+            "id": 408
+          },
+          {
+            "kind": "name_absent",
+            "id": 409
+          },
+          {
+            "kind": "no_dangling_name_ids"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.stat-values-for-pinned-axis-dropped",
+      "title": "STAT values on a pinned axis are reduced to the one the pin selects",
+      "covers": [
+        "G5",
+        "G10"
+      ],
+      "class": "fonttools",
+      "rationale": "The design axis record for MONO stays (see partial.stat-keeps-records-for-pinned-axes) but its two axis values do not both stay: pinning MONO to 0 makes the font a Sans, so 'Sans' at MONO 0 remains true and 'Mono' at MONO 1 becomes unreachable. Keeping both would make the font claim two mutually exclusive styles at once. Measured: name ID 402 'Sans' survives and 403 'Mono' is pruned.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5",
+          "wght": "300:700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_present",
+            "id": 402
+          },
+          {
+            "kind": "name_absent",
+            "id": 403
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.stat-format4-value-dropped-when-unreachable",
+      "title": "A format 4 STAT value survives only if every axis it names is still reachable at that point",
+      "covers": [
+        "G5",
+        "G10"
+      ],
+      "class": "fonttools",
+      "rationale": "Recursive's 'Upright' and 'Italic' are format 4 records, each naming a combination — Upright is slnt 0 with CRSV 0.5, Italic is slnt -15 with CRSV 1. A format 4 record is an all-or-nothing conjunction, so it survives only when every one of its AxisValueRecords is still reachable. Measured: pinning slnt to 0 and CRSV to 0.5 keeps Upright (name ID 413) and drops Italic (414); pinning CRSV to 1 with slnt still at 0 drops both, since neither combination is satisfiable — which is the case checked here.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "1"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_absent",
+            "id": 413
+          },
+          {
+            "kind": "name_absent",
+            "id": 414
+          },
+          {
+            "kind": "no_dangling_name_ids"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.stat-format4-value-kept-when-reachable",
+      "title": "The format 4 value the pin actually selects is kept",
+      "covers": [
+        "G5",
+        "G10"
+      ],
+      "class": "fonttools",
+      "rationale": "The other side of the previous case, so that its expectation cannot be satisfied by a program that simply deletes all format 4 records. Pinning slnt to 0 and CRSV to 0.5 lands exactly on the Upright combination, which remains true of every location the sliced font can render, so it must survive; Italic, which requires slnt -15, cannot. Measured: name ID 413 present, 414 absent.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_present",
+            "id": 413
+          },
+          {
+            "kind": "name_absent",
+            "id": 414
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.featurevars-folded-into-feature-list",
+      "title": "A condition set that holds at the new default is folded into the feature itself",
+      "covers": [
+        "G6"
+      ],
+      "class": "fonttools",
+      "rationale": "Recursive's 'rvrn' feature has no lookups of its own; the substitution a -> a.italic reaches it only through a FeatureVariations record conditioned on CRSV being at or above about 0.9 normalized. Pinning CRSV to 1 makes that condition true everywhere in the remaining design space, so the condition has nothing left to decide and the substitution must become unconditional — leaving it in a FeatureVariations table would make correctness depend on an axis that no longer exists. Measured: after slicing, 'rvrn' runs one lookup, that lookup maps a to a.italic, and the GSUB has no FeatureVariations at all.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "1"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_feature_variations",
+            "table": "GSUB"
+          },
+          {
+            "kind": "feature_lookup_count",
+            "table": "GSUB",
+            "feature": "rvrn",
+            "equals": 1
+          },
+          {
+            "kind": "substitutes",
+            "table": "GSUB",
+            "feature": "rvrn",
+            "from": "a",
+            "to": "a.italic"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.featurevars-unreachable-condition-dropped",
+      "title": "A condition set that cannot hold anywhere in the new space is dropped",
+      "covers": [
+        "G6"
+      ],
+      "class": "fonttools",
+      "rationale": "Pinning CRSV to its default of 0.5 puts the axis at normalized 0, below the ~0.8 threshold the cursive condition needs, and the axis can no longer move. The substitution is therefore unreachable and must be removed rather than left behind pointing at an axis index that no longer exists — a stale condition table is not merely dead weight, it is a dangling index into fvar. Measured: the whole 'rvrn' feature disappears from the feature list, the lookup list is emptied, and GSUB carries no FeatureVariations; an absent feature runs zero lookups, hence the count of 0.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_feature_variations",
+            "table": "GSUB"
+          },
+          {
+            "kind": "feature_lookup_count",
+            "table": "GSUB",
+            "feature": "rvrn",
+            "equals": 0
+          },
+          {
+            "kind": "substitutes",
+            "table": "GSUB",
+            "feature": "rvrn",
+            "from": "a",
+            "to": "a.italic",
+            "not": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.featurevars-renumbered-to-new-axis-index",
+      "title": "A surviving condition is renumbered to the surviving axis's new index",
+      "covers": [
+        "G6",
+        "G2"
+      ],
+      "class": "fonttools",
+      "rationale": "ConditionTable format 1 addresses its axis by index into fvar, not by tag. CRSV is Recursive's fifth axis, index 4; when the other four are pinned it becomes the only axis, index 0, and every condition that mentions it must be rewritten or it will read whatever axis now occupies slot 4 — which is nothing, making the font malformed. Measured: fontTools emits four condition sets, all on axis index 0, and `feature_variation_axes_valid` is the check that would catch the stale index.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "wght": "400"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "CRSV"
+            ]
+          },
+          {
+            "kind": "no_feature_variations",
+            "table": "GSUB",
+            "not": true
+          },
+          {
+            "kind": "feature_variation_axes_valid",
+            "table": "GSUB"
+          },
+          {
+            "kind": "substitutes",
+            "table": "GSUB",
+            "feature": "rvrn",
+            "from": "a",
+            "to": "a.italic",
+            "not": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.featurevars-renumbered-to-second-position",
+      "title": "Renumbering is positional, not a blanket reset to zero",
+      "covers": [
+        "G6",
+        "G2"
+      ],
+      "class": "fonttools",
+      "rationale": "The previous case would also pass if a program simply set every condition's axis index to 0. Here wght survives alongside CRSV, so CRSV moves from index 4 to index 1 and the conditions must follow it there. Measured: fontTools emits conditions on axis index 1, the position CRSV occupies in the two-axis fvar [wght, CRSV]. This is also the case where a condition on a pinned axis must vanish rather than be renumbered: the MONO and slnt conditions in the source records are evaluated against their pins and either satisfied — and removed from the condition set — or fatal to the whole record.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "wght": "300:700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "wght",
+              "CRSV"
+            ]
+          },
+          {
+            "kind": "feature_variation_axes_valid",
+            "table": "GSUB"
+          },
+          {
+            "kind": "no_feature_variations",
+            "table": "GSUB",
+            "not": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.featurevars-condition-renormalized-to-restricted-range",
+      "title": "A surviving condition's threshold is renormalized onto the narrowed axis",
+      "covers": [
+        "G6",
+        "G3"
+      ],
+      "class": "fonttools",
+      "rationale": "Condition tables store normalized coordinates, so narrowing an axis moves every threshold on it. Recursive's cursive condition fires at normalized 0.79998779296875, which on the full CRSV axis is design 0.9; restricting CRSV to 0:0.95 rescales the upper half so that same design value 0.9 now normalizes to about 0.8888512138885122, and fontTools rewrites the condition to that. Leaving the raw 0.8 would move the switchover from design 0.9 to design 0.9 x 0.8 / 0.8888..., changing where the italic substitution kicks in — a silent behavioural change with no visible cause.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "wght": "400",
+          "CRSV": "0:0.95"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_extent",
+            "tag": "CRSV",
+            "min": 0,
+            "default": 0.5,
+            "max": 0.95
+          },
+          {
+            "kind": "no_feature_variations",
+            "table": "GSUB",
+            "not": true
+          },
+          {
+            "kind": "feature_variation_axes_valid",
+            "table": "GSUB"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.featurevars-condition-outside-restricted-range-dropped",
+      "title": "Restricting the axis below a condition's threshold removes the condition",
+      "covers": [
+        "G6",
+        "G2"
+      ],
+      "class": "fonttools",
+      "rationale": "The cursive substitution needs CRSV at design 0.9 or above. Restricting CRSV to 0:0.75 makes that unreachable, so the record must go for the same reason as the pinned-to-default case: it can never fire, and it indexes an axis whose range no longer contains its trigger. This is the range counterpart to partial.featurevars-unreachable-condition-dropped and shows that reachability is judged against the new extents rather than against the new default alone. Measured: no records survive, the 'rvrn' feature is gone, and no substitution remains.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "wght": "400",
+          "CRSV": "0:0.75"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_extent",
+            "tag": "CRSV",
+            "min": 0,
+            "default": 0.5,
+            "max": 0.75
+          },
+          {
+            "kind": "feature_lookup_count",
+            "table": "GSUB",
+            "feature": "rvrn",
+            "equals": 0
+          },
+          {
+            "kind": "substitutes",
+            "table": "GSUB",
+            "feature": "rvrn",
+            "from": "a",
+            "to": "a.italic",
+            "not": true
+          },
+          {
+            "kind": "feature_variation_axes_valid",
+            "table": "GSUB"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.featurevars-all-records-die-but-axes-survive",
+      "title": "When every condition dies, no substitution is left behind",
+      "covers": [
+        "G6"
+      ],
+      "class": "fonttools",
+      "rationale": "MONO and wght both survive here, and MONO is one of the axes the source conditions test, but CRSV is pinned to its default so no record can fire. The requirement is that nothing conditional remains active and no condition indexes a missing axis. This case deliberately does not assert `no_feature_variations`: fontTools 4.62.1 leaves an empty FeatureVariations table behind in exactly this shape — zero records, still written to the file — where it removes the table outright when no conditioned axis survives. That is harmless and spec-legal, so failing the case over it would be scoring a wart rather than a defect; `feature_variation_count` is proposed above so the corpus can state `equals: 0` explicitly.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "MONO",
+              "wght"
+            ]
+          },
+          {
+            "kind": "feature_lookup_count",
+            "table": "GSUB",
+            "feature": "rvrn",
+            "equals": 0
+          },
+          {
+            "kind": "substitutes",
+            "table": "GSUB",
+            "feature": "rvrn",
+            "from": "a",
+            "to": "a.italic",
+            "not": true
+          },
+          {
+            "kind": "feature_variation_axes_valid",
+            "table": "GSUB"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.gpos-untouched-by-feature-variation-resolution",
+      "title": "GPOS keeps its features and gains no feature variations",
+      "covers": [
+        "G6"
+      ],
+      "class": "fonttools",
+      "rationale": "Recursive's GPOS has a single 'kern' feature with one lookup and no FeatureVariations. Resolving GSUB's conditions must not disturb it: kerning still applies across the whole surviving range, and a program that rebuilt both layout tables through the same code path could plausibly drop the feature when it found nothing conditional to fold in. Measured: 'kern' still runs one lookup and GPOS still has no FeatureVariations after slicing.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5",
+          "wght": "300:700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "has_table",
+            "table": "GPOS"
+          },
+          {
+            "kind": "no_feature_variations",
+            "table": "GPOS"
+          },
+          {
+            "kind": "feature_lookup_count",
+            "table": "GPOS",
+            "feature": "kern",
+            "equals": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.instance-name-records-pruned",
+      "title": "Name records for dropped named instances are pruned",
+      "covers": [
+        "G10",
+        "G4"
+      ],
+      "class": "fonttools",
+      "rationale": "Recursive-VF carries 128 name records naming its 64 instances. When every instance is dropped, those records name nothing; the OpenType `name` specification allocates IDs 256 and above precisely for fvar and STAT to point at, so a record in that range with no referrer is dead data that inflates the file and confuses tools that enumerate styles. Measured: pinning slnt to 0 and CRSV to 1 removes all 64 instances and every name ID from 274 to 401 disappears, leaving no name ID above 255 unreferenced.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "1"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "named_instance_count",
+            "equals": 0
+          },
+          {
+            "kind": "name_absent",
+            "id": 274
+          },
+          {
+            "kind": "name_absent",
+            "id": 338
+          },
+          {
+            "kind": "name_absent",
+            "id": 346
+          },
+          {
+            "kind": "no_dangling_name_ids"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.surviving-instance-names-retained",
+      "title": "Name records for instances that survive are retained",
+      "covers": [
+        "G10",
+        "G4"
+      ],
+      "class": "fonttools",
+      "rationale": "Pruning must be driven by what is still referenced, not by a blanket deletion of high name IDs — the previous case would pass either way. Here eight instances survive, so their subfamily and PostScript name records must survive with them: 338 'Sans Linear Light' and 346 'Sans Linear' stay, while 274 'Mono Linear Light' and 340 'Sans Linear Light Italic' go with their dropped instances. Measured against fontTools, with no dangling IDs left in either direction.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "named_instance_count",
+            "equals": 8
+          },
+          {
+            "kind": "name_present",
+            "id": 338
+          },
+          {
+            "kind": "name_present",
+            "id": 339
+          },
+          {
+            "kind": "name_present",
+            "id": 346
+          },
+          {
+            "kind": "name_absent",
+            "id": 274
+          },
+          {
+            "kind": "name_absent",
+            "id": 340
+          },
+          {
+            "kind": "no_dangling_name_ids"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.name-table-after-restriction-is-exactly-what-is-referenced",
+      "title": "The whole name table after a restriction is the referenced set and nothing more",
+      "covers": [
+        "G10",
+        "G4",
+        "G5"
+      ],
+      "class": "fonttools",
+      "rationale": "The individual pruning cases each check one record; this one bounds the entire table, so an implementation cannot pass them all while leaking some other orphan. The set was measured from fontTools' output for this exact input: IDs 0 to 6 from the source font's own metadata, 269 to 273 for the five STAT design axes, ten records for the five surviving instances and their PostScript names, and 402 and 404 to 409 and 413 for the surviving STAT axis values. Anything outside that set is an orphan; `name_ids_subset_of` states it as an upper bound so that a future fixture change that legitimately adds a record does not silently pass.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5",
+          "wght": "300:700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_ids_subset_of",
+            "ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              269,
+              270,
+              271,
+              272,
+              273,
+              338,
+              339,
+              346,
+              347,
+              354,
+              355,
+              362,
+              363,
+              370,
+              371,
+              402,
+              404,
+              405,
+              406,
+              407,
+              408,
+              409,
+              413
+            ]
+          },
+          {
+            "kind": "no_dangling_name_ids"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.range-above-default-refused",
+      "title": "A restricted range entirely above the axis default is refused",
+      "covers": [
+        "B7"
+      ],
+      "class": "slice-ui",
+      "rationale": "Level 3 sub-spacing can narrow an axis but cannot move where its default sits, because the default location is the one the glyf outlines themselves encode; every gvar delta is measured from it. Asking for wght 400:700 on an axis whose default is 300 would require rebuilding the default instance at 400, which is Level 4 work the compiler does not do. Refusing is therefore the honest answer, and the message must name the axis and the default so the user can see what to type instead.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5",
+          "wght": "400:700"
+        }
+      },
+      "expect": {
+        "outcome": "error",
+        "message_contains": [
+          "wght",
+          "default",
+          "300"
+        ]
+      }
+    },
+    {
+      "id": "partial.range-below-default-refused",
+      "title": "A restricted range entirely below the axis default is refused",
+      "covers": [
+        "B7",
+        "B9"
+      ],
+      "class": "slice-ui",
+      "rationale": "The same rule from the other side: wght 100:250 does not contain the default of 300, so it is refused. This case also fixes the interaction with B9, which records that out-of-extent bounds are not checked by the editor and are clamped later by fontTools — the containment test must run on what the user typed, before any clamping, or 100:250 would be clamped to 300:300 and quietly accepted as a pin. Refusing is correct because the user asked for a design space the font cannot provide.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5",
+          "wght": "100:250"
+        }
+      },
+      "expect": {
+        "outcome": "error",
+        "message_contains": [
+          "wght",
+          "default",
+          "300"
+        ]
+      }
+    },
+    {
+      "id": "partial.range-missing-default-on-centred-axis-refused",
+      "title": "The rule applies to an axis whose default is in the middle",
+      "covers": [
+        "B7"
+      ],
+      "class": "slice-ui",
+      "rationale": "CRSV runs 0 to 1 with its default at 0.5, so both 0.6:1 and 0:0.4 exclude the default while sitting entirely inside the axis's own extent — no clamping is involved and the request looks superficially reasonable. It is still refused, for the same reason: a Level 3 slice cannot relocate the default, and moving CRSV's default from 0.5 to 0.6 would mean recomputing every glyph's default outline. The message must name CRSV and its default so the refusal is actionable.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "wght": "400",
+          "CRSV": "0.6:1"
+        }
+      },
+      "expect": {
+        "outcome": "error",
+        "message_contains": [
+          "crsv",
+          "default",
+          "0.5"
+        ]
+      }
+    },
+    {
+      "id": "partial.reversed-range-still-checked-against-default",
+      "title": "A reversed range is sorted first and then checked for the default",
+      "covers": [
+        "B6",
+        "B7"
+      ],
+      "class": "slice-ui",
+      "rationale": "B6 sorts the bounds and B7 then tests containment, so the two rules have to compose: 700:400 becomes 400:700, which still excludes wght's default of 300 and is still refused. Checking containment before sorting would compare 300 against a range whose minimum is 700 and maximum is 400 and could reach either verdict by accident. The order of the two rules is therefore load-bearing and this case pins it.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5",
+          "wght": "700:400"
+        }
+      },
+      "expect": {
+        "outcome": "error",
+        "message_contains": [
+          "wght",
+          "default",
+          "300"
+        ]
+      }
+    },
+    {
+      "id": "partial.range-with-default-at-its-minimum-accepted",
+      "title": "A range whose minimum is the default is accepted",
+      "covers": [
+        "B7",
+        "G2"
+      ],
+      "class": "slice-ui",
+      "rationale": "Containment is inclusive, so a default sitting exactly on the range minimum satisfies the Level 3 rule — the default location is inside the requested space and does not have to move. This is the common case for Recursive, whose wght default of 300 is also its minimum, and refusing it would make the axis unrestrictable at all. The positive case is needed alongside the refusals so that an implementation cannot pass B7 by rejecting every range.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5",
+          "wght": "300:800"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_extent",
+            "tag": "wght",
+            "min": 300,
+            "default": 300,
+            "max": 800
+          },
+          {
+            "kind": "named_instance_count",
+            "equals": 6
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.min-default-axis-range-must-start-at-the-minimum",
+      "title": "On an axis whose default is its minimum, no range may start above the minimum",
+      "covers": [
+        "B7"
+      ],
+      "class": "slice-ui",
+      "rationale": "The `single-axis-min-default` fixture has the shape the roster describes as Recursive's wght: default equal to the axis minimum. That shape makes the Level 3 rule maximally restrictive — the only legal ranges are those starting at the minimum, so the axis can be trimmed from the top but never from the bottom. This is worth its own case because it is the shape where a user is most likely to be surprised, and the refusal message has to explain the constraint rather than merely report a rejection.",
+      "fixture": "single-axis-min-default",
+      "input": {
+        "axes": {
+          "wght": "400:900"
+        }
+      },
+      "expect": {
+        "outcome": "error",
+        "message_contains": [
+          "wght",
+          "default"
+        ]
+      }
+    },
+    {
+      "id": "partial.centred-default-range-above-default-refused",
+      "title": "On a centred axis, a range above the default is refused",
+      "covers": [
+        "B7"
+      ],
+      "class": "slice-ui",
+      "rationale": "The `centred-default` fixture runs 100/400/900, so 500:900 asks for the upper part of the axis with the default left outside it. Level 3 cannot move a default, so this must be refused even though the request is a perfectly sensible thing to want — 'give me only the bold half' is a Level 4 operation. The fixture matters because a centred default is where an implementation that only ever tested min-default axes would be most likely to let this through.",
+      "fixture": "centred-default",
+      "input": {
+        "axes": {
+          "wght": "500:900"
+        }
+      },
+      "expect": {
+        "outcome": "error",
+        "message_contains": [
+          "wght",
+          "default",
+          "400"
+        ]
+      }
+    },
+    {
+      "id": "partial.centred-default-symmetric-restriction",
+      "title": "A centred default keeps its position when both halves are trimmed",
+      "covers": [
+        "B7",
+        "G2",
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "Normalization treats the two sides of a default independently: on a 100/400/900 axis, 250 is halfway down and normalizes to -0.5 while 650 is halfway up and normalizes to +0.5, even though 150 user units separate the first pair and 250 the second. Restricting to 250:650 rescales each half by a different factor — the lower by 300/150 and the upper by 500/250 — so a program that normalizes with a single span would be right at the default and wrong everywhere else. Verified with fontTools on a purpose-built 100/400/900 font: fvar comes out 250/400/650 and the sliced outlines match the source at 250, 300, 400, 500 and 650 to within 0.01 units.",
+      "fixture": "centred-default",
+      "input": {
+        "axes": {
+          "wght": "250:650"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_count",
+            "equals": 1
+          },
+          {
+            "kind": "axis_extent",
+            "tag": "wght",
+            "min": 250,
+            "default": 400,
+            "max": 650
+          },
+          {
+            "kind": "outlines_match_source_across",
+            "locations": [
+              {
+                "wght": 250
+              },
+              {
+                "wght": 300
+              },
+              {
+                "wght": 400
+              },
+              {
+                "wght": 500
+              },
+              {
+                "wght": 650
+              }
+            ],
+            "tolerance": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.centred-default-asymmetric-restriction",
+      "title": "Trimming only the upper half leaves the lower half's mapping alone",
+      "covers": [
+        "B7",
+        "G2",
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "100:650 leaves the lower half of the centred axis exactly as it was and shrinks only the upper half, so the two halves must be rescaled by different factors — 1 and 500/250. This is the sharpest test of independent renormalization: a program using one span for the whole axis would either distort the untouched half or leave the trimmed half unscaled, and either error is invisible at the default. Sampling below, at and above the default is what makes both failures observable.",
+      "fixture": "centred-default",
+      "input": {
+        "axes": {
+          "wght": "100:650"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_extent",
+            "tag": "wght",
+            "min": 100,
+            "default": 400,
+            "max": 650
+          },
+          {
+            "kind": "outlines_match_source_across",
+            "locations": [
+              {
+                "wght": 100
+              },
+              {
+                "wght": 250
+              },
+              {
+                "wght": 400
+              },
+              {
+                "wght": 525
+              },
+              {
+                "wght": 650
+              }
+            ],
+            "tolerance": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.centred-default-lower-half-only",
+      "title": "A centred axis trimmed to its default upward stays variable downward",
+      "covers": [
+        "B7",
+        "G2",
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "100:400 keeps the default at the range maximum, which B7 admits, and leaves an axis that varies only below its default. The positive normalized half is then empty, so every gvar tuple whose peak is positive on this axis becomes unreachable and must be dropped while the negative-side deltas are preserved untouched. Getting this wrong shows up as the light end of the axis losing its variation or as leftover deltas that can never fire.",
+      "fixture": "centred-default",
+      "input": {
+        "axes": {
+          "wght": "100:400"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "has_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "axis_extent",
+            "tag": "wght",
+            "min": 100,
+            "default": 400,
+            "max": 400
+          },
+          {
+            "kind": "outlines_match_source_across",
+            "locations": [
+              {
+                "wght": 100
+              },
+              {
+                "wght": 250
+              },
+              {
+                "wght": 400
+              }
+            ],
+            "tolerance": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.centred-default-upper-half-only",
+      "title": "A centred axis trimmed to its default downward stays variable upward",
+      "covers": [
+        "B7",
+        "G2",
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "The mirror of the previous case: 400:900 keeps the default at the range minimum and leaves only the upper half. Together the two cases show that neither half is privileged — an implementation that special-cased 'default equals minimum' as the only degenerate shape, which is what Recursive's wght would teach it, would fail one of them. The outlines are sampled at both ends and the midpoint so that a collapsed or unscaled half cannot pass.",
+      "fixture": "centred-default",
+      "input": {
+        "axes": {
+          "wght": "400:900"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_extent",
+            "tag": "wght",
+            "min": 400,
+            "default": 400,
+            "max": 900
+          },
+          {
+            "kind": "outlines_match_source_across",
+            "locations": [
+              {
+                "wght": 400
+              },
+              {
+                "wght": 650
+              },
+              {
+                "wght": 900
+              }
+            ],
+            "tolerance": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.outlines-correct-across-two-restricted-axes",
+      "title": "Outlines are correct across the whole surviving rectangle, not just at its default",
+      "covers": [
+        "G2",
+        "G3",
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "This is the property most likely to be silently wrong, because every structural check in this file can pass on a font whose deltas were rescaled incorrectly. With two axes restricted, the surviving design space is a rectangle and the sampled locations cover its corners, its edges and an interior point, so an error in either axis's rescaling or in the interaction between them shows up. The reference is the source fixture drawn at the same location, which is the only definition of correct that does not privilege either implementation.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5",
+          "MONO": "0:0.5",
+          "wght": "300:700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "outlines_match_source_across",
+            "locations": [
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 300,
+                "slnt": 0,
+                "CRSV": 0.5
+              },
+              {
+                "MONO": 0.5,
+                "CASL": 0,
+                "wght": 300,
+                "slnt": 0,
+                "CRSV": 0.5
+              },
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 700,
+                "slnt": 0,
+                "CRSV": 0.5
+              },
+              {
+                "MONO": 0.5,
+                "CASL": 0,
+                "wght": 700,
+                "slnt": 0,
+                "CRSV": 0.5
+              },
+              {
+                "MONO": 0.2,
+                "CASL": 0,
+                "wght": 480,
+                "slnt": 0,
+                "CRSV": 0.5
+              }
+            ],
+            "tolerance": 1.0
+          },
+          {
+            "kind": "advances_match_source_at",
+            "location": {
+              "MONO": 0.5,
+              "CASL": 0,
+              "wght": 700,
+              "slnt": 0,
+              "CRSV": 0.5
+            },
+            "tolerance": 1.0
+          },
+          {
+            "kind": "all_coordinates_finite"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.outlines-correct-across-whole-surviving-axis",
+      "title": "An axis left whole still interpolates correctly after its neighbours are pinned",
+      "covers": [
+        "B1",
+        "G2",
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "Pinning four axes rewrites every gvar tuple: regions that mentioned a pinned axis are either evaluated into the default outline or discarded, and the surviving one-dimensional deltas must reproduce the source exactly along wght. The default location is the one point where this is guaranteed to look right even if the rewrite is wrong, so the check samples the ends and the interior. Measured with fontTools: maximum coordinate deviation from the source across 300, 400, 700 and 1000 stays well under one unit.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "outlines_match_source_across",
+            "locations": [
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 300,
+                "slnt": 0,
+                "CRSV": 0.5
+              },
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 400,
+                "slnt": 0,
+                "CRSV": 0.5
+              },
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 700,
+                "slnt": 0,
+                "CRSV": 0.5
+              },
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 1000,
+                "slnt": 0,
+                "CRSV": 0.5
+              }
+            ],
+            "tolerance": 1.0
+          },
+          {
+            "kind": "contour_count",
+            "glyph": "a",
+            "equals": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.two-axis-fixture-restricted-outlines",
+      "title": "The minimal two-axis fixture slices to one axis with correct outlines",
+      "covers": [
+        "G2",
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "Recursive is a real font with avar, feature variations and a five-axis space; when a case on it fails there are several possible causes. The `two-axis` fixture is the same operation with everything else removed, so a failure here isolates the core of partial instancing — rewriting fvar and rescaling gvar — from every other mechanism. It is the case to look at first when the Recursive cases go red.",
+      "fixture": "two-axis",
+      "input": {
+        "axes": {
+          "wdth": "100"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "wght"
+            ]
+          },
+          {
+            "kind": "has_table",
+            "table": "gvar"
+          },
+          {
+            "kind": "outlines_match_source_across",
+            "locations": [
+              {
+                "wght": 100,
+                "wdth": 100
+              },
+              {
+                "wght": 400,
+                "wdth": 100
+              },
+              {
+                "wght": 900,
+                "wdth": 100
+              }
+            ],
+            "tolerance": 1.0
+          },
+          {
+            "kind": "all_coordinates_finite"
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial.composites-survive-a-restricted-range",
+      "title": "Composite glyphs interpolate correctly across a restricted range",
+      "covers": [
+        "G2",
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "A composite glyph's gvar deltas move its component offsets rather than points, and a nested composite resolves through two levels of that. Rescaling those deltas onto a narrowed axis is the same arithmetic as for simple contours but a different code path, and an implementation can easily get one right and the other wrong — the error only appears where components are placed, so a check on the base glyphs alone would miss it. The outlines are compared after component resolution, which is what a renderer sees.",
+      "fixture": "composites",
+      "input": {
+        "axes": {
+          "wdth": "100"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "wght"
+            ]
+          },
+          {
+            "kind": "has_table",
+            "table": "gvar"
+          },
+          {
+            "kind": "outlines_match_source_across",
+            "locations": [
+              {
+                "wght": 100,
+                "wdth": 100
+              },
+              {
+                "wght": 400,
+                "wdth": 100
+              },
+              {
+                "wght": 900,
+                "wdth": 100
+              }
+            ],
+            "tolerance": 1.0
+          },
+          {
+            "kind": "head_bbox_matches_outlines"
+          },
+          {
+            "kind": "maxp_covers_outlines"
+          }
+        ]
+      }
+    }
+  ]
+}

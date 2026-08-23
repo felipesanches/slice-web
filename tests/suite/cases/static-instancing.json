@@ -1,0 +1,1850 @@
+{
+  "area": "static-instancing",
+  "_proposed_checks": [
+    {
+      "name": "overlap_flags",
+      "fields": [
+        {
+          "name": "simple",
+          "type": "bool",
+          "meaning": "expected state of the glyf OVERLAP_SIMPLE flag (0x40) on the first point of every simple glyph that has at least one contour"
+        },
+        {
+          "name": "compound",
+          "type": "bool",
+          "meaning": "expected state of OVERLAP_COMPOUND (0x400) on the first component of every composite glyph"
+        }
+      ],
+      "justification": "G12 is not observable with any check kind in the README: `bit_set` is restricted to OS/2.fsSelection and head.macStyle, and the overlap flags live in glyf, per glyph. The property is uniform over the font rather than about one named glyph, so a whole-font check is both simpler and fixture-independent. Note the boundary fontTools actually implements (verified in fontTools 4.62.1, instancer.setMacOverlapFlags): glyphs with zero contours - an empty .notdef or a space - get no flag at all, because there is no first point to set it on, so the check must exempt them."
+    },
+    {
+      "name": "composites_preserved",
+      "fields": [
+        {
+          "name": "except_glyphs",
+          "type": "list of glyph names, optional",
+          "meaning": "glyphs that are allowed to have been decomposed"
+        }
+      ],
+      "justification": "There is no check kind that distinguishes a composite glyph from a simple one. `contour_count` is ambiguous for composites - a composite's glyf numberOfContours is -1 while its decomposed contour count is a different number - so it cannot express 'this is still a composite'. Comparing against the source fixture rather than naming glyphs keeps the case honest for a fixture whose glyph names the corpus author does not control, and states the real property: instancing must not silently decompose."
+    },
+    {
+      "name": "glyph_instructions_preserved",
+      "fields": [],
+      "justification": "Passes when every glyph that carries TrueType instructions in the source fixture still carries byte-identical instructions in the output. No existing check kind can see per-glyph bytecode; `has_table` covers only fpgm/prep/cvt. Verified in fontTools 4.62.1: a glyph program survives instantiateVariableFont plus save unchanged (a 6-byte program came back as the same 6 bytes), so a program that vanished or was truncated would be a real regression and is currently undetectable by the corpus."
+    },
+    {
+      "name": "maxp_covers_instructions",
+      "fields": [],
+      "justification": "Passes when maxp.maxSizeOfInstructions is at least the length of the longest glyph program in the output. `maxp_covers_outlines` covers points and contours only. This is the one part of maxp that instancing can leave stale: maxp.recalc in fontTools 4.62.1 documents and implements 'recalculate ... most other maxp values except for the TT instructions values', and a deliberately wrong maxSizeOfInstructions of 1 in front of a 6-byte program survived a full instancing and save unaltered. A rasteriser sizes its instruction buffer from this field."
+    }
+  ],
+  "cases": [
+    {
+      "id": "static.load.ttf-accepted",
+      "title": "A TrueType variable font is accepted and sliced",
+      "covers": [
+        "A1",
+        "A3",
+        "G1"
+      ],
+      "class": "slice-ui",
+      "rationale": "A1 makes acceptance of an input exactly the question 'can fontTools.ttLib.TTFont open it', with no format sniffing of the tool's own. This case is the positive half of that contract: a well-formed sfnt with an fvar table must be opened, sliced and written without complaint. It is the floor every other case in this area stands on, so it is worth failing separately rather than as a confusing side effect of some later expectation.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "300",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "sfnt_flavor",
+            "equals": "truetype"
+          },
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.load.woff-input",
+      "title": "A WOFF input slices to the same static instance as the TTF",
+      "covers": [
+        "A1",
+        "A3",
+        "G1",
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "A3 rests on TTFont dispatching on the container, so a WOFF input must be decompressed and instanced exactly as its uncompressed twin: WOFF is a lossless repackaging of the same sfnt tables, and the OpenType/WOFF specification requires the decoded tables to be byte-recoverable. Verified in fontTools 4.62.1: slicing Recursive-VF.subset.woff and Recursive-VF.subset.ttf at the same location produced identical glyph coordinates, hmtx, head bbox, maxp and table set. Any divergence would mean the container, not the design space, changed the outlines.",
+      "fixture": "recursive-vf-woff",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "1",
+          "wght": "700",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "sfnt_flavor",
+            "equals": "truetype"
+          },
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "MONO": 0,
+              "CASL": 1,
+              "wght": 700,
+              "slnt": 0,
+              "CRSV": 0.5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.load.woff2-input",
+      "title": "A WOFF2 input slices to the same static instance as the TTF",
+      "covers": [
+        "A1",
+        "A3",
+        "G1",
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "WOFF2 applies a transform to glyf and loca, so unlike WOFF it is not a byte-for-byte repackaging and is the container most likely to perturb outlines; the WOFF2 specification nevertheless requires the transform to reconstruct the original glyph outlines exactly. Verified in fontTools 4.62.1: Recursive-VF.subset.woff2 sliced at MONO=0 CASL=1 wght=700 produced glyph coordinates, hmtx, head bbox and maxp identical to the TTF sliced at the same location. This is the case that would catch a reconstruction bug being mistaken for an instancing bug.",
+      "fixture": "recursive-vf-woff2",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "1",
+          "wght": "700",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "sfnt_flavor",
+            "equals": "truetype"
+          },
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "MONO": 0,
+              "CASL": 1,
+              "wght": 700,
+              "slnt": 0,
+              "CRSV": 0.5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.pin-all.drops-fvar-and-gvar",
+      "title": "Pinning every axis removes fvar and gvar",
+      "covers": [
+        "G1"
+      ],
+      "class": "spec",
+      "rationale": "The OpenType specification defines fvar as the table that declares a font's variation axes and gvar as the table of glyph deltas indexed by them; an fvar with zero axes is not a legal record, and gvar deltas with nothing to interpolate against are unreachable data. Once every axis has a fixed coordinate the deltas have been consumed into the outlines, so keeping them would both bloat the file and let a renderer apply them twice. Verified in fontTools 4.62.1: both tables are absent after instantiateVariableFont with all five Recursive axes pinned.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "1",
+          "CASL": "1",
+          "wght": "1000",
+          "slnt": "-15",
+          "CRSV": "1"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "no_table",
+            "table": "gvar"
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.pin-all.drops-metrics-variation-stores",
+      "title": "Pinning every axis removes HVAR, VVAR and MVAR",
+      "covers": [
+        "G1"
+      ],
+      "class": "spec",
+      "rationale": "HVAR, VVAR and MVAR are all item variation stores whose delta-set indices are resolved against a normalized coordinate vector; with no fvar there is no coordinate vector, so per the OpenType specification those tables cannot be interpreted and must not be present. Their content is not discarded but baked in first - see static.mvar.applied-then-deleted - so removing them loses nothing. Verified in fontTools 4.62.1: the output table set after a full pin of recursive-vf contains none of the three. The VVAR expectation is inert for this fixture, which has no vertical metrics, and is stated so that a fixture that gains them is covered.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "400",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "HVAR"
+          },
+          {
+            "kind": "no_table",
+            "table": "VVAR"
+          },
+          {
+            "kind": "no_table",
+            "table": "MVAR"
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.pin-all.drops-avar",
+      "title": "Pinning every axis removes avar",
+      "covers": [
+        "G1",
+        "G3"
+      ],
+      "class": "spec",
+      "rationale": "avar exists only to remap the normalized value of an fvar axis, and the OpenType specification requires its axis segment maps to correspond one-to-one, in order, with the fvar axes. A static font has no fvar axes, so an avar would have to be either empty or dangling; either is malformed. Verified in fontTools 4.62.1: avar is absent from the output of a full pin of recursive-vf, whose source avar carries a non-trivial eight-point map on wght and a steep segment on slnt.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "600",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "avar"
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.pin-all.keeps-stat",
+      "title": "STAT survives a full pin",
+      "covers": [
+        "G1",
+        "G5"
+      ],
+      "class": "spec",
+      "rationale": "STAT is the one variation-related table that is not about interpolation: the OpenType specification requires it in all variable fonts and recommends it in every static font that is part of a variable family, because it is what tells the shell where this instance sits in the family's style space. Removing it alongside fvar would turn a well-described instance into an orphan. Verified in fontTools 4.62.1: after a full pin the STAT table is present, its DesignAxisRecord still lists all five Recursive axes, and only the axis values that do not hold at the pinned location have been dropped.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "300",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "has_table",
+            "table": "STAT"
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.pin-all.no-dangling-name-ids",
+      "title": "Axis and instance name records left behind are exactly the ones STAT still uses",
+      "covers": [
+        "G1",
+        "G5",
+        "G10"
+      ],
+      "class": "spec",
+      "rationale": "The OpenType name specification reserves IDs 256 and above for font-specific uses referenced from other tables; once fvar is gone, an ID that nothing points at is dead weight that no shell can ever display. The interesting part is that a full pin does not strip all of them: STAT keeps its design axis records, so the five axis nameIDs stay referenced and must survive. Verified in fontTools 4.62.1: a fully pinned recursive-vf retains nameIDs 269-273 (the axis names, referenced by STAT DesignAxisRecord) plus the surviving STAT axis-value names, and drops the sixty-four instance subfamily names that fvar used to own.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "300",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_dangling_name_ids"
+          },
+          {
+            "kind": "has_table",
+            "table": "STAT"
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.pin-all.keeps-glyph-set",
+      "title": "Instancing does not subset the glyph set, the layout tables or the hinting tables",
+      "covers": [
+        "G1"
+      ],
+      "class": "fonttools",
+      "rationale": "Instancing narrows the design space, not the character set, and it is a different operation from subsetting; it must not quietly do both, nor drop tables it merely fails to recognise. This matters concretely for recursive-vf, where a.italic is reachable only through a feature-variation substitution: at the default location nothing substitutes it any more, yet dropping the glyph would change what a shaper can produce through other means and would renumber every glyph ID. The gasp and prep expectations guard the same property from the other side - a table-allowlist implementation that kept only the tables the corpus names elsewhere would silently unhint the output. Verified in fontTools 4.62.1: numGlyphs stays 3 and cmap, GDEF, GPOS, GSUB, gasp and prep are all still present after a full pin.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "300",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "glyph_count",
+            "equals": 3
+          },
+          {
+            "kind": "has_table",
+            "table": "cmap"
+          },
+          {
+            "kind": "has_table",
+            "table": "GDEF"
+          },
+          {
+            "kind": "has_table",
+            "table": "GPOS"
+          },
+          {
+            "kind": "has_table",
+            "table": "GSUB"
+          },
+          {
+            "kind": "has_table",
+            "table": "gasp"
+          },
+          {
+            "kind": "has_table",
+            "table": "prep"
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.pin-all.feature-variation-folded-in",
+      "title": "A feature variation that holds at the pinned location becomes an ordinary feature",
+      "covers": [
+        "G1",
+        "G6"
+      ],
+      "class": "spec",
+      "rationale": "FeatureVariations condition sets are expressed in normalized axis coordinates and are indexed by fvar axis order, so the OpenType specification gives them no meaning in a font without fvar; leaving one behind in a static instance is malformed. A condition that is satisfied at the pinned location is not simply discarded, though - its substitutions are what the user asked for and must survive as a plain feature. Verified in fontTools 4.62.1: pinning recursive-vf at slnt=-15, CRSV=1 leaves GSUB with no FeatureVariations, one lookup, and rvrn mapping a to a.italic.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "400",
+          "slnt": "-15",
+          "CRSV": "1"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_feature_variations",
+            "table": "GSUB"
+          },
+          {
+            "kind": "feature_lookup_count",
+            "table": "GSUB",
+            "feature": "rvrn",
+            "equals": 1
+          },
+          {
+            "kind": "substitutes",
+            "table": "GSUB",
+            "feature": "rvrn",
+            "from": "a",
+            "to": "a.italic"
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.pin-all.dead-feature-variation-dropped",
+      "title": "A feature variation that cannot hold at the pinned location leaves no lookups behind",
+      "covers": [
+        "G1",
+        "G6"
+      ],
+      "class": "fonttools",
+      "rationale": "The mirror of the previous case: at the fvar default nothing in recursive-vf's rvrn condition set is satisfied, so the italic substitution must not fire in the instance. If the lookups were folded in unconditionally the upright instance would shape 'a' as 'a.italic' - a visible, silent corruption. Verified in fontTools 4.62.1: at the default location the output GSUB has no FeatureVariations, an empty LookupList, and no rvrn feature record at all.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "300",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_feature_variations",
+            "table": "GSUB"
+          },
+          {
+            "kind": "feature_lookup_count",
+            "table": "GSUB",
+            "feature": "rvrn",
+            "equals": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.dsig-deleted",
+      "title": "DSIG is deleted from a static instance",
+      "covers": [
+        "G11"
+      ],
+      "class": "spec",
+      "rationale": "DSIG is a digital signature over the font's own bytes; instancing rewrites glyf, hmtx, head, maxp, OS/2 and the table directory, so any signature carried over is guaranteed invalid, and the OpenType specification is explicit that the signature covers the whole font file. Shipping an invalid signature is worse than shipping none: Windows treats a broken DSIG as a tampered font. Verified in fontTools 4.62.1: instantiateVariableFont deletes DSIG unconditionally, before it touches anything else. Note that recursive-vf as committed carries no DSIG, so this case is inert until the fixture builder adds a stub DSIG - it should, because this is the only claim it can exercise.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "400",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "DSIG"
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.usweightclass.from-pin-max",
+      "title": "usWeightClass follows a wght pin at the axis maximum",
+      "covers": [
+        "G7"
+      ],
+      "class": "spec",
+      "rationale": "The OpenType specification says the registered wght axis and OS/2.usWeightClass express the same quantity on the same 1-1000 scale, and that an instance's usWeightClass should match its wght coordinate; a font left declaring the variable font's default weight would sort and substitute as the wrong weight everywhere. recursive-vf's source usWeightClass is 300, so a pin at 1000 must change it. Verified in fontTools 4.62.1 (varLib.set_default_weight_width_slant): the output reads 1000.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "1000",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "usWeightClass",
+            "equals": 1000
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.usweightclass.from-pin-interior",
+      "title": "usWeightClass follows a wght pin between the axis extremes",
+      "covers": [
+        "G7"
+      ],
+      "class": "spec",
+      "rationale": "The same rule at an interior coordinate, which is where it actually bites: recursive-vf's wght axis has its default at the minimum (300), so every instance except the lightest needs usWeightClass rewritten. A Regular sliced out of this family must declare 400, or every OS style-matcher will file it as Light. Verified in fontTools 4.62.1: usWeightClass is 400 after pinning wght=400.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "400",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "usWeightClass",
+            "equals": 400
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.usweightclass.is-userspace-not-avar-mapped",
+      "title": "usWeightClass is the coordinate the user typed, not the avar-mapped one",
+      "covers": [
+        "G7",
+        "G3"
+      ],
+      "class": "spec",
+      "rationale": "avar remaps normalized coordinates to redistribute interpolation; it says nothing about what the design-space label means. The OpenType specification defines usWeightClass in user-space weight units, so it must be read off the pin before normalization - recursive-vf's avar bends wght hard (normalized 0.4286 maps to 0.4286 but 0.2857 maps to 0.3400), and taking the mapped value would produce a weight class that no user asked for. Verified in fontTools 4.62.1: pinning wght=600, a coordinate that avar demonstrably moves, still yields usWeightClass 600.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "600",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "usWeightClass",
+            "equals": 600
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.usweightclass.rounds-fractional-pin",
+      "title": "A fractional wght pin rounds to an integer usWeightClass",
+      "covers": [
+        "G7",
+        "B3"
+      ],
+      "class": "fonttools",
+      "rationale": "fvar axis coordinates are Fixed 16.16 and can legitimately be fractional, but OS/2.usWeightClass is a uint16, so some rounding rule must be applied and it must be stated rather than left to whatever the language's float-to-int does. fontTools uses otRound, which is round-half-up: 350.5 goes to 351, where Python's own round() and any round-half-to-even implementation would give 350. That difference is why the value probed here is a half-way one - it is the only kind of input on which the two conventions disagree. Verified in fontTools 4.62.1.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "350.5",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "usWeightClass",
+            "equals": 351
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.usweightclass.centred-default-extreme",
+      "title": "usWeightClass follows the pin on an axis whose default is centred",
+      "covers": [
+        "G7",
+        "G1"
+      ],
+      "class": "spec",
+      "rationale": "centred-default has wght 100/400/900, so a pin at the maximum is two-thirds of the way up a design space whose two halves normalize at different rates; the weight class is nevertheless read straight off the user-space coordinate and owes nothing to normalization. This is the shape of axis on which an implementation that computed the weight class from the normalized value would be caught out, because 900 normalizes to 1.0 while 250 and 650 both normalize to half. The OpenType specification defines usWeightClass on the same scale as the wght coordinate itself.",
+      "fixture": "centred-default",
+      "input": {
+        "axes": {
+          "wght": "900"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "os2_field",
+            "field": "usWeightClass",
+            "equals": 900
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.usweightclass.centred-default-minimum",
+      "title": "usWeightClass follows a pin below the centred default",
+      "covers": [
+        "G7",
+        "G1"
+      ],
+      "class": "spec",
+      "rationale": "The lower half of centred-default's wght axis spans 100 to 400 while the upper spans 400 to 900, so the two sides normalize at different rates and a value below the default is the case an implementation is most likely to mishandle. As above, the OpenType specification puts usWeightClass on the wght axis's own scale, so the answer is simply the pinned number. Keeping both halves as separate cases means a sign or direction error shows up as one failure rather than none.",
+      "fixture": "centred-default",
+      "input": {
+        "axes": {
+          "wght": "100"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "os2_field",
+            "field": "usWeightClass",
+            "equals": 100
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.italicangle.from-slnt-extreme",
+      "title": "post.italicAngle follows a slnt pin",
+      "covers": [
+        "G7"
+      ],
+      "class": "spec",
+      "rationale": "The OpenType specification defines the registered slnt axis in counter-clockwise degrees from the vertical, and post.italicAngle in exactly the same units and sign convention, so an oblique instance whose italicAngle is left at 0 lies to every application that uses it - synthetic italic, underline slanting and caret placement all read it. recursive-vf's source post.italicAngle is 0.0, so a pin at the slnt minimum must change it. Verified in fontTools 4.62.1: pinning slnt=-15 gives italicAngle -15.0.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "300",
+          "slnt": "-15",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "post_field",
+            "field": "italicAngle",
+            "equals": -15.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.italicangle.fractional-slnt",
+      "title": "A fractional slnt pin is carried into post.italicAngle without rounding",
+      "covers": [
+        "G7",
+        "B3"
+      ],
+      "class": "spec",
+      "rationale": "Unlike usWeightClass, post.italicAngle is a Fixed 16.16 field, so it can hold the fractional coordinate exactly and there is no reason to round it; the caret slope a renderer derives from it would visibly disagree with the outlines if it were rounded to a whole degree. Verified in fontTools 4.62.1: pinning slnt=-7.5 gives italicAngle exactly -7.5, and slnt=-0.5 gives -0.5. The contrast with the wght cases is deliberate - two registered axes, two different numeric contracts, both spelled out.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "350.5",
+          "slnt": "-7.5",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "post_field",
+            "field": "italicAngle",
+            "equals": -7.5
+          },
+          {
+            "kind": "os2_field",
+            "field": "usWeightClass",
+            "equals": 351
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.italicangle.upright-stays-zero",
+      "title": "Pinning slnt at 0 leaves post.italicAngle at zero",
+      "covers": [
+        "G7"
+      ],
+      "class": "spec",
+      "rationale": "The rule has to be idempotent at the upright end or every non-slanted instance of a slnt-bearing family acquires a spurious angle. slnt=0 is the fvar default here, and the OpenType specification's convention makes 0 degrees the upright value for both slnt and italicAngle, so the correct output is the value the font already had. Verified in fontTools 4.62.1: italicAngle is 0.0 after pinning slnt=0.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "700",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "post_field",
+            "field": "italicAngle",
+            "equals": 0.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.uswidthclass.normal",
+      "title": "wdth=100 gives usWidthClass 5",
+      "covers": [
+        "G7"
+      ],
+      "class": "spec",
+      "rationale": "The OpenType specification tabulates usWidthClass 1-9 against nine named widths from Ultra-condensed to Ultra-expanded, and pairs class 5 (Medium/normal) with a wdth of 100%; the registered wdth axis is defined as a percentage of normal width, so 100 must map to 5. Verified in fontTools 4.62.1 against WDTH_VALUE_TO_OS2_WIDTH_CLASS. This case and the five that follow require the two-axis fixture's wdth axis to span the full registered 50-200 range with default 100, because fontTools clamps a pin to the axis extent before mapping and a narrower fixture would silently test a different value.",
+      "fixture": "two-axis",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "os2_field",
+            "field": "usWidthClass",
+            "equals": 5
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.uswidthclass.ultra-condensed",
+      "title": "wdth=50 gives usWidthClass 1",
+      "covers": [
+        "G7"
+      ],
+      "class": "spec",
+      "rationale": "50% is the OpenType specification's Ultra-condensed anchor and the bottom of the registered wdth range, so it maps to class 1; it is also the endpoint that a clamping bug would move, since fontTools clamps the value into 50..200 before mapping. Verified in fontTools 4.62.1: piecewiseLinearMap over the nine registered nodes gives 1 at 50, and any pin below 50 clamps to 1 as well. Requires two-axis's wdth axis to reach 50.",
+      "fixture": "two-axis",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "50"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "usWidthClass",
+            "equals": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.uswidthclass.between-nodes-rounds-up",
+      "title": "wdth=70 gives usWidthClass 3, not 2",
+      "covers": [
+        "G7"
+      ],
+      "class": "fonttools",
+      "rationale": "70 lies between the Extra-condensed node at 62.5 and the Condensed node at 75, so the piecewise-linear map gives 2.6, which rounds to 3; an implementation that floored, or that treated the map as a lookup of the nearest lower node, would answer 2. The OpenType specification names only the nine anchors and says nothing about values between them, so this is fontTools' documented rule rather than a spec requirement, and it is what the original inherits. Verified in fontTools 4.62.1. Requires two-axis's wdth axis to include 70.",
+      "fixture": "two-axis",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "70"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "usWidthClass",
+            "equals": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.uswidthclass.upper-segment-is-not-linear",
+      "title": "wdth=120 gives usWidthClass 7, showing the map is piecewise and not linear in wdth",
+      "covers": [
+        "G7"
+      ],
+      "class": "fonttools",
+      "rationale": "A naive linear map from 50..200 onto 1..9 would put 120 at about 4.7; the real map is piecewise over nine unevenly spaced nodes, and between 112.5 (class 6) and 125 (class 7) the value 120 gives 6.6, which rounds to 7. This is the single best case for catching an implementation that reimplemented the mapping as arithmetic instead of a table. Verified in fontTools 4.62.1. Requires two-axis's wdth axis to include 120.",
+      "fixture": "two-axis",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "120"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "usWidthClass",
+            "equals": 7
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.uswidthclass.wide-segment-half-way",
+      "title": "wdth=175 gives usWidthClass 9",
+      "covers": [
+        "G7"
+      ],
+      "class": "fonttools",
+      "rationale": "The last two nodes are 150 (class 8) and 200 (class 9), fifty units apart where the lower segments are 12.5 apart, so 175 sits exactly half way and the map yields 8.5; otRound is round-half-up, so the answer is 9 rather than the 8 that round-half-to-even would give. This is the only half-way point in the whole map, which makes it the case that pins down the rounding rule for widths. Verified in fontTools 4.62.1. Requires two-axis's wdth axis to reach 175.",
+      "fixture": "two-axis",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "175"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "usWidthClass",
+            "equals": 9
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.uswidthclass.untouched-without-wdth-axis",
+      "title": "A font with no wdth axis keeps the usWidthClass it had",
+      "covers": [
+        "G7"
+      ],
+      "class": "fonttools",
+      "rationale": "The rewrite is keyed on the axis being present in the pinned location, not on the field existing: recursive-vf has MONO, CASL, wght, slnt and CRSV but no wdth, so there is no width information to derive and the font's own declaration must stand. An implementation that reset usWidthClass to a default of 5 whenever it wrote an instance would be wrong for any condensed family, and would be invisible here only by coincidence. Verified in fontTools 4.62.1: usWidthClass is 5 before and after, because set_default_weight_width_slant never enters the wdth branch.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "1",
+          "CASL": "0",
+          "wght": "800",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "usWidthClass",
+            "equals": 5
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.maxp.recalculated-from-final-outlines",
+      "title": "maxp is recalculated from the instanced outlines, not carried over",
+      "covers": [
+        "G8"
+      ],
+      "class": "spec",
+      "rationale": "maxp declares the buffers a TrueType rasteriser must allocate before it touches a glyph, so the OpenType specification requires its maxima to describe the glyf table actually present; a stale maxp is a correctness problem, not a size problem, because an under-reported maxPoints leaves the interpreter's point array short. recursive-vf as committed carries maxp values inherited from the unsubsetted family - maxPoints 392, maxContours 22, maxCompositePoints 291, maxComponentElements 4, maxComponentDepth 1 - none of which describe its three glyphs. Verified in fontTools 4.62.1: after a full pin and save, maxp reads 102/2/0/0/0/0, recomputed by maxp.recalc during compile.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "400",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "maxp_field",
+            "field": "maxPoints",
+            "equals": 102
+          },
+          {
+            "kind": "maxp_field",
+            "field": "maxContours",
+            "equals": 2
+          },
+          {
+            "kind": "maxp_field",
+            "field": "maxCompositePoints",
+            "equals": 0
+          },
+          {
+            "kind": "maxp_field",
+            "field": "maxCompositeContours",
+            "equals": 0
+          },
+          {
+            "kind": "maxp_field",
+            "field": "maxComponentElements",
+            "equals": 0
+          },
+          {
+            "kind": "maxp_field",
+            "field": "maxComponentDepth",
+            "equals": 0
+          },
+          {
+            "kind": "maxp_covers_outlines"
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.head.bbox-recalculated-at-default",
+      "title": "The head bounding box is recalculated at the default location",
+      "covers": [
+        "G8"
+      ],
+      "class": "spec",
+      "rationale": "The OpenType head specification defines xMin/yMin/xMax/yMax as the union of all glyph bounding boxes; applications use it to size caches and to compute a fallback line box, so a box inherited from the variable font describes the wrong font. recursive-vf's source head box is -275,-330,2380,1125, left over from the unsubsetted family. Verified in fontTools 4.62.1: after pinning every axis at the fvar default the box is 75,-10,565,536, the union of the two non-empty glyphs, recomputed by maxp.recalc during save.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "300",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "head_field",
+            "field": "xMin",
+            "equals": 75
+          },
+          {
+            "kind": "head_field",
+            "field": "yMin",
+            "equals": -10
+          },
+          {
+            "kind": "head_field",
+            "field": "xMax",
+            "equals": 565
+          },
+          {
+            "kind": "head_field",
+            "field": "yMax",
+            "equals": 536
+          },
+          {
+            "kind": "head_bbox_matches_outlines"
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.head.bbox-recalculated-at-extreme",
+      "title": "The head bounding box tracks the instanced outlines at an extreme location",
+      "covers": [
+        "G8",
+        "G13"
+      ],
+      "class": "spec",
+      "rationale": "The bounding box is not a property of the font file but of the instance, and the whole point of recalculating it is that different locations give different answers - at MONO=1 CASL=1 wght=1000 slnt=-15 CRSV=1 the slanted, heaviest outlines reach left of the origin. Asserting a second, different box is what distinguishes genuine recalculation from a lucky constant. Verified in fontTools 4.62.1: the box is -23,-11,596,562 at that location, against 75,-10,565,536 at the default.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "1",
+          "CASL": "1",
+          "wght": "1000",
+          "slnt": "-15",
+          "CRSV": "1"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "head_field",
+            "field": "xMin",
+            "equals": -23
+          },
+          {
+            "kind": "head_field",
+            "field": "yMin",
+            "equals": -11
+          },
+          {
+            "kind": "head_field",
+            "field": "xMax",
+            "equals": 596
+          },
+          {
+            "kind": "head_field",
+            "field": "yMax",
+            "equals": 562
+          },
+          {
+            "kind": "head_bbox_matches_outlines"
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.head.flags-bit1-recalculated",
+      "title": "head flags bit 1 is recomputed from the final left side bearings",
+      "covers": [
+        "G8"
+      ],
+      "class": "spec",
+      "rationale": "head.flags bit 1 asserts that every glyph's left side bearing equals its xMin, and the OpenType specification lets a rasteriser take shortcuts on that promise; instancing moves outlines and rewrites hmtx, so the promise has to be re-tested rather than inherited. Verified in fontTools 4.62.1: maxp.recalc sets the bit when every non-empty glyph has lsb == xMin and clears it otherwise, and for a fully pinned recursive-vf head.flags is 3 - bit 0 (baseline at y=0) from the source plus the recomputed bit 1. The whole field is asserted because the check vocabulary's bit_set covers only fsSelection and macStyle.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "1000",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "head_field",
+            "field": "flags",
+            "equals": 3
+          },
+          {
+            "kind": "head_field",
+            "field": "unitsPerEm",
+            "equals": 1000
+          },
+          {
+            "kind": "head_field",
+            "field": "indexToLocFormat",
+            "equals": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.hhea.extremes-recalculated-at-default",
+      "title": "hhea's extremes are recalculated from the instanced hmtx and glyf",
+      "covers": [
+        "G8"
+      ],
+      "class": "spec",
+      "rationale": "The OpenType hhea specification defines advanceWidthMax, minLeftSideBearing, minRightSideBearing and xMaxExtent as maxima and minima over the font's actual horizontal metrics, and layout engines use xMaxExtent to decide how far a glyph may paint outside its advance. recursive-vf inherits 2400/-275/-289/2380 from the unsubsetted family, which describes glyphs this font does not contain. Verified in fontTools 4.62.1: at the default location the output reads 600/75/35/565, and numberOfHMetrics collapses to 1 because all three advances are 600.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "300",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "hhea_field",
+            "field": "advanceWidthMax",
+            "equals": 600
+          },
+          {
+            "kind": "hhea_field",
+            "field": "minLeftSideBearing",
+            "equals": 75
+          },
+          {
+            "kind": "hhea_field",
+            "field": "minRightSideBearing",
+            "equals": 35
+          },
+          {
+            "kind": "hhea_field",
+            "field": "xMaxExtent",
+            "equals": 565
+          },
+          {
+            "kind": "hhea_field",
+            "field": "numberOfHMetrics",
+            "equals": 1
+          },
+          {
+            "kind": "hhea_matches_hmtx"
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.hhea.extremes-recalculated-at-extreme",
+      "title": "hhea's extremes differ at a different pinned location",
+      "covers": [
+        "G8",
+        "G13"
+      ],
+      "class": "spec",
+      "rationale": "As with the head box, a single location cannot tell a recalculated value from a coincidence. At the heaviest slanted corner of recursive-vf's design space the left side bearing goes negative while the advance stays 600, so three of the four extremes change and one does not - exactly the pattern that catches a partial recalculation. Verified in fontTools 4.62.1: 600/-23/4/596 at MONO=1 CASL=1 wght=1000 slnt=-15 CRSV=1.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "1",
+          "CASL": "1",
+          "wght": "1000",
+          "slnt": "-15",
+          "CRSV": "1"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "hhea_field",
+            "field": "advanceWidthMax",
+            "equals": 600
+          },
+          {
+            "kind": "hhea_field",
+            "field": "minLeftSideBearing",
+            "equals": -23
+          },
+          {
+            "kind": "hhea_field",
+            "field": "minRightSideBearing",
+            "equals": 4
+          },
+          {
+            "kind": "hhea_field",
+            "field": "xMaxExtent",
+            "equals": 596
+          },
+          {
+            "kind": "hhea_matches_hmtx"
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.mvar.applied-then-deleted",
+      "title": "MVAR deltas are baked into the metrics tables before MVAR is dropped",
+      "covers": [
+        "G1",
+        "G8"
+      ],
+      "class": "spec",
+      "rationale": "MVAR carries deltas for named metrics in OS/2, post, hhea and vhea; the OpenType specification's whole design is that the static values in those tables are the default-instance values, and an instance at another location must have the deltas applied or it silently ships the default's underline, strikeout and x-height. Dropping the table without applying it is the failure mode this case exists to catch - the table set would look right and the numbers would be wrong. Verified in fontTools 4.62.1: at wght=1000 with the other four axes at default, post.underlinePosition moves from -205 to -145, underlineThickness from 45 to 150, OS/2.sxHeight from 526 to 550, yStrikeoutPosition from 284 to 314 and yStrikeoutSize from 45 to 80, and MVAR is gone.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "1000",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "MVAR"
+          },
+          {
+            "kind": "post_field",
+            "field": "underlinePosition",
+            "equals": -145
+          },
+          {
+            "kind": "post_field",
+            "field": "underlineThickness",
+            "equals": 150
+          },
+          {
+            "kind": "os2_field",
+            "field": "sxHeight",
+            "equals": 550
+          },
+          {
+            "kind": "os2_field",
+            "field": "yStrikeoutPosition",
+            "equals": 314
+          },
+          {
+            "kind": "os2_field",
+            "field": "yStrikeoutSize",
+            "equals": 80
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.mvar.default-location-leaves-metrics-alone",
+      "title": "At the default location MVAR removal changes no metric",
+      "covers": [
+        "G1",
+        "G8"
+      ],
+      "class": "spec",
+      "rationale": "The OpenType specification defines the values stored in OS/2, post and hhea as those of the default instance, so applying MVAR at the default must be a no-op; a case that only ever checks a moved value cannot tell 'applied correctly' from 'applied twice' or 'applied with the wrong sign'. Pairing this with static.mvar.applied-then-deleted brackets the arithmetic from both sides. Verified in fontTools 4.62.1: at the fvar default the five metrics that move at wght=1000 read exactly the source values 526, 284, 45, -205 and 45.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "300",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "MVAR"
+          },
+          {
+            "kind": "os2_field",
+            "field": "sxHeight",
+            "equals": 526
+          },
+          {
+            "kind": "os2_field",
+            "field": "yStrikeoutPosition",
+            "equals": 284
+          },
+          {
+            "kind": "os2_field",
+            "field": "yStrikeoutSize",
+            "equals": 45
+          },
+          {
+            "kind": "post_field",
+            "field": "underlinePosition",
+            "equals": -205
+          },
+          {
+            "kind": "post_field",
+            "field": "underlineThickness",
+            "equals": 45
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.os2.xavgcharwidth-recalculated",
+      "title": "OS/2.xAvgCharWidth is recalculated for the instance",
+      "covers": [
+        "G9"
+      ],
+      "class": "spec",
+      "rationale": "For OS/2 version 3 and later the specification defines xAvgCharWidth as the arithmetic mean of the advance widths of all non-zero-width glyphs, so it is a function of hmtx and must be recomputed once instancing has resolved the advances. recursive-vf declares 628, a figure inherited from the full family; its three surviving glyphs all advance 600. Verified in fontTools 4.62.1: instantiateVariableFont calls OS/2.recalcAvgCharWidth and the output reads 600 at every location tested.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "1",
+          "CASL": "1",
+          "wght": "1000",
+          "slnt": "-15",
+          "CRSV": "1"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "xAvgCharWidth",
+            "equals": 600
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.overlap.simple-glyphs-flagged",
+      "title": "OVERLAP_SIMPLE is set on every simple glyph of a static instance",
+      "covers": [
+        "G12"
+      ],
+      "class": "fonttools",
+      "rationale": "Variable fonts are normally drawn with overlapping contours, and the OpenType glyf specification's OVERLAP_SIMPLE flag on the first point tells a rasteriser to fill with the non-zero rule; Apple's rasterisers honour it and, without it, an interpolated instance can render with holes where strokes cross. Setting it unconditionally is what fontTools does at the default overlap mode and what the original therefore inherits, and it is safe because a non-overlapping outline fills identically under either rule. Verified in fontTools 4.62.1: after a full pin, both contoured glyphs of recursive-vf have flag 0x40 on point 0, while the empty .notdef gets nothing because it has no points.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "700",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "overlap_flags",
+            "simple": true,
+            "compound": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.overlap.composites-flagged",
+      "title": "OVERLAP_COMPOUND is set on composites of a static instance",
+      "covers": [
+        "G12"
+      ],
+      "class": "fonttools",
+      "rationale": "A composite whose components overlap - the accent of a precomposed letter crossing its base is the everyday case - needs the same non-zero fill promise, and the OpenType glyf specification puts it in a different flag, OVERLAP_COMPOUND (0x400), carried on a component rather than a point. Verified in fontTools 4.62.1 (setMacOverlapFlags): the flag is set on the first component only, not on every component, for both the plain and the two-deep nested composite in a purpose-built test font. A checker that demanded it on all components would wrongly fail conformant output.",
+      "fixture": "composites",
+      "input": {
+        "axes": {
+          "wght": "700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "overlap_flags",
+            "simple": true,
+            "compound": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.composites.survive-as-composites",
+      "title": "Composite glyphs are not decomposed by static instancing",
+      "covers": [
+        "G1",
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "Decomposition is a lossless-looking change that is not free: it multiplies the point count, defeats the hinting a composite inherits from its components, and grows the file, so instancing must not do it as a side effect. gvar deltas for a composite apply to component offsets, and applying them requires nothing more than rewriting those offsets, so there is no technical reason to flatten. Verified in fontTools 4.62.1 on a purpose-built composite variable font: at the default overlap mode both a plain and a two-deep nested composite came through the instancer still composite, with their component offsets moved by the deltas (200,0 became 230,10).",
+      "fixture": "composites",
+      "input": {
+        "axes": {
+          "wght": "700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "composites_preserved"
+          },
+          {
+            "kind": "no_table",
+            "table": "gvar"
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.composites.maxp-and-bbox",
+      "title": "Composite maxp fields and bounding boxes are recalculated through the component tree",
+      "covers": [
+        "G8"
+      ],
+      "class": "spec",
+      "rationale": "maxCompositePoints, maxCompositeContours, maxComponentElements and maxComponentDepth are defined by the OpenType specification over the flattened component tree, and a composite's own bounding box has to be derived from its components after their offsets have been changed by gvar - a rasteriser that trusts a stale composite bbox will clip. The roster fixture nests one composite two deep, so maxComponentDepth must be 2. Verified in fontTools 4.62.1 on an equivalent purpose-built font: maxp.recalc walked the nesting to depth 2 and the head box picked up the accent lifted by a nested component's offset.",
+      "fixture": "composites",
+      "input": {
+        "axes": {
+          "wght": "700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "maxp_field",
+            "field": "maxComponentDepth",
+            "equals": 2
+          },
+          {
+            "kind": "maxp_covers_outlines"
+          },
+          {
+            "kind": "head_bbox_matches_outlines"
+          },
+          {
+            "kind": "hhea_matches_hmtx"
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.composites.outlines-match-source",
+      "title": "Composite outlines at the pinned location match the source drawn there",
+      "covers": [
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "For a composite, gvar deltas move component offsets rather than points, which is a separate code path from simple-glyph interpolation and the one most likely to be got wrong - an off-by-one in the phantom-point count silently shifts an accent. Drawing the instance and the source at the same location and comparing the resulting paths tests the composite after resolution, so it catches both a wrong offset and a wrongly interpolated component. Verified in fontTools 4.62.1: a component offset of 200,0 with a delta of 30,10 came out at 230,10 in the instance, matching the source evaluated at that location.",
+      "fixture": "composites",
+      "input": {
+        "axes": {
+          "wght": "700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "wght": 700
+            }
+          },
+          {
+            "kind": "advances_match_source_at",
+            "location": {
+              "wght": 700
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.outlines.match-source-at-default",
+      "title": "Outlines at the default location match the source drawn at the default",
+      "covers": [
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "This is the identity case for G13: pinning every axis at its fvar default must reproduce the default instance exactly, because the OpenType specification defines glyf as holding the default-instance outlines and all deltas at the default are zero. Any deviation means deltas were applied where none should have been, or the normalization of the default coordinate is not landing on zero. Advances are checked alongside because hmtx and the phantom points are resolved by the same machinery.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "300",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "MONO": 0,
+              "CASL": 0,
+              "wght": 300,
+              "slnt": 0,
+              "CRSV": 0.5
+            }
+          },
+          {
+            "kind": "advances_match_source_at",
+            "location": {
+              "MONO": 0,
+              "CASL": 0,
+              "wght": 300,
+              "slnt": 0,
+              "CRSV": 0.5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.outlines.match-source-at-extreme",
+      "title": "Outlines at the far corner of the design space match the source drawn there",
+      "covers": [
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "The corner where all five axes are at an extreme is where every delta set contributes at full scale and where the region-scalar products are largest, so a sign error or a mis-ordered axis shows up here at maximum amplitude. It is also the location whose outlines differ most from the stored default, which makes the comparison meaningful rather than nearly trivial. Verified in fontTools 4.62.1 that this location produces materially different outlines - the head box moves from 75,-10,565,536 to -23,-11,596,562.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "1",
+          "CASL": "1",
+          "wght": "1000",
+          "slnt": "-15",
+          "CRSV": "1"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "MONO": 1,
+              "CASL": 1,
+              "wght": 1000,
+              "slnt": -15,
+              "CRSV": 1
+            }
+          },
+          {
+            "kind": "advances_match_source_at",
+            "location": {
+              "MONO": 1,
+              "CASL": 1,
+              "wght": 1000,
+              "slnt": -15,
+              "CRSV": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.outlines.match-source-at-avar-bent-interior",
+      "title": "Outlines at an interior location match, with avar and fractional coordinates in play",
+      "covers": [
+        "G13",
+        "G3"
+      ],
+      "class": "fonttools",
+      "rationale": "Interior locations are the ones avar actually changes: recursive-vf's wght segment map moves normalized 0.2857 to 0.3400, so an implementation that skipped avar would produce outlines that are subtly too light or too heavy, in a way that neither the default nor the extremes would reveal. Pairing that with a fractional slnt coordinate also exercises interpolation between delta regions rather than landing on a master. This is the case that distinguishes 'applies the deltas' from 'applies the deltas at the right coordinate'.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "600",
+          "slnt": "-7.5",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "MONO": 0,
+              "CASL": 0,
+              "wght": 600,
+              "slnt": -7.5,
+              "CRSV": 0.5
+            }
+          },
+          {
+            "kind": "advances_match_source_at",
+            "location": {
+              "MONO": 0,
+              "CASL": 0,
+              "wght": 600,
+              "slnt": -7.5,
+              "CRSV": 0.5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.outlines.coordinates-finite-and-contours-intact",
+      "title": "Instanced outlines are finite and keep their contour structure",
+      "covers": [
+        "G13",
+        "G8"
+      ],
+      "class": "spec",
+      "rationale": "glyf coordinates are 16-bit integers, so there is no representation for a non-finite value; a NaN reaching the outline pipeline - from a NaN pin, or from a division by a zero-width delta region - either raises on compile or writes a nonsense integer, and this check names that failure directly rather than letting it surface as a mismatched outline. Contour count is a structural invariant of interpolation: deltas move points, they never add, remove or merge contours, so recursive-vf's 'a' must still have exactly two. Verified in fontTools 4.62.1 at every location tested.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "1",
+          "CASL": "0",
+          "wght": "500",
+          "slnt": "-15",
+          "CRSV": "1"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "all_coordinates_finite"
+          },
+          {
+            "kind": "contour_count",
+            "glyph": "a",
+            "equals": 2
+          },
+          {
+            "kind": "glyph_count",
+            "equals": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.outlines.single-axis-default-at-minimum",
+      "title": "An axis whose default equals its minimum instances correctly at that default",
+      "covers": [
+        "G1",
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "When the default sits at the axis minimum the negative half of the normalized range is empty, so every delta region has a zero-width lower side; an implementation that divides by the region width without guarding it produces a division by zero or a NaN exactly here. This is the shape Recursive's own wght axis has, which makes it worth isolating in a one-axis fixture where nothing else can mask it. The correct answer is the plain one: pinning at the default reproduces the stored default outlines and leaves a static font.",
+      "fixture": "single-axis-min-default",
+      "input": {
+        "axes": {
+          "wght": "300"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "no_table",
+            "table": "gvar"
+          },
+          {
+            "kind": "all_coordinates_finite"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "wght": 300
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.outlines.single-axis-at-maximum",
+      "title": "The same one-axis font instances at the top of its range",
+      "covers": [
+        "G7",
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "The companion to the previous case: with the default at the minimum, the maximum is the only location where deltas apply at full scale, so it is the only place the delta arithmetic is exercised at all on this fixture. Pinning there must both interpolate the outlines and rewrite usWeightClass, which for a wght axis the OpenType specification puts on the same scale as the coordinate. Between the two cases the fixture's entire design space is covered.",
+      "fixture": "single-axis-min-default",
+      "input": {
+        "axes": {
+          "wght": "1000"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "os2_field",
+            "field": "usWeightClass",
+            "equals": 1000
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "wght": 1000
+            }
+          },
+          {
+            "kind": "advances_match_source_at",
+            "location": {
+              "wght": 1000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.hinting.control-tables-preserved",
+      "title": "fpgm, prep and cvt survive static instancing",
+      "covers": [
+        "G1",
+        "G8"
+      ],
+      "class": "fonttools",
+      "rationale": "The control-value program, the font program and the control value table are not variation data: they are the font's hinting, and nothing about pinning an axis makes them invalid. Deleting them would silently unhint the instance, which changes rendering at small sizes on every rasteriser that runs the interpreter. Verified in fontTools 4.62.1 on a purpose-built hinted variable font: fpgm, prep and cvt all came through a full pin byte for byte. Where a cvar is present its deltas are folded into cvt and only cvar is removed - a cvt entry of 700 became 730 - which is the same 'apply, then drop' rule as MVAR.",
+      "fixture": "hinted",
+      "input": {
+        "axes": {
+          "wght": "700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "has_table",
+            "table": "fpgm"
+          },
+          {
+            "kind": "has_table",
+            "table": "prep"
+          },
+          {
+            "kind": "has_table",
+            "table": "cvt "
+          },
+          {
+            "kind": "no_table",
+            "table": "cvar"
+          },
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.hinting.glyph-programs-preserved",
+      "title": "Per-glyph instructions survive static instancing unchanged",
+      "covers": [
+        "G1",
+        "G8"
+      ],
+      "class": "fonttools",
+      "rationale": "TrueType instructions address points by index, and instancing changes coordinates but never the number or order of points, so the programs remain meaningful and must be kept. They are not re-generated for the instance either: the hints were authored against the default outlines, and at another location they will be doing approximately, not exactly, the right thing - a known limitation of instancing that the corpus records rather than pretends away. Verified in fontTools 4.62.1: a six-byte glyph program survived instancing and save byte for byte.",
+      "fixture": "hinted",
+      "input": {
+        "axes": {
+          "wght": "700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "glyph_instructions_preserved"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "wght": 700
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "static.hinting.maxp-instruction-limits-cover-the-programs",
+      "title": "maxp's instruction limits still cover the programs the instance carries",
+      "covers": [
+        "G8"
+      ],
+      "class": "spec",
+      "rationale": "maxp.maxSizeOfInstructions sizes the interpreter's instruction buffer, and the OpenType specification requires it to be at least the largest glyph program in the font. This is the one part of maxp that instancing does not recompute: fontTools' maxp.recalc documents and implements 'recalculate ... most other maxp values except for the TT instructions values', and a deliberately falsified maxSizeOfInstructions of 1 in front of a six-byte program survived a full pin and save unchanged in fontTools 4.62.1. So the claim in G8 that maxp is recalculated is true of the point and contour maxima and false of the instruction maxima; the property that must hold either way is coverage, which is what this case asserts.",
+      "fixture": "hinted",
+      "input": {
+        "axes": {
+          "wght": "700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "maxp_covers_instructions"
+          },
+          {
+            "kind": "maxp_covers_outlines"
+          }
+        ]
+      }
+    }
+  ]
+}

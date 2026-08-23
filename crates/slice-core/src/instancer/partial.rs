@@ -476,11 +476,14 @@ pub fn instantiate_partial(font: &FontRef, plans: &[AxisPlan]) -> Result<Vec<u8>
         out.add_table(&os2)
             .map_err(|e| SliceError::Write(e.to_string()))?;
     }
-    if let Ok(post) = font.post() {
-        let mut post: write_fonts::tables::post::Post = post.to_owned_table();
-        super::mvar::apply_to_post(&mut post, &adjustments);
-        out.add_table(&post)
-            .map_err(|e| SliceError::Write(e.to_string()))?;
+    // Only when MVAR actually has something to say about it; see `finalize::owned_post`
+    // for why converting this table is not free of hazards.
+    if !adjustments.is_empty() {
+        if let Some(mut post) = crate::finalize::owned_post(font) {
+            super::mvar::apply_to_post(&mut post, &adjustments);
+            out.add_table(&post)
+                .map_err(|e| SliceError::Write(e.to_string()))?;
+        }
     }
 
     // Tables whose contents describe the old axis space and are rebuilt or dropped here.

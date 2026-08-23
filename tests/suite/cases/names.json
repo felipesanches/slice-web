@@ -1,0 +1,2313 @@
+{
+  "area": "names",
+  "_fixture_requirements": {
+    "note": "Cases in this area depend on the name table of each fixture, which the roster in tests/suite/README.md does not pin down. What follows is what fixtures/build.py must produce for these cases to be meaningful. recursive-vf is a fixed file and its entry records observed facts rather than requirements; two-axis and named-instances are generated, and their entries are requirements.",
+    "recursive-vf": {
+      "status": "observed from testdata/fonts/Recursive-VF.subset.ttf with fontTools 4.62.1",
+      "name_records": "every record is platform 3 / encoding 1 / language 1033; there are no Macintosh (platform 1) and no non-English records",
+      "name_ids_present": "0, 1, 2, 3, 4, 5, 6, and 269 through 414",
+      "absent": "no nameID 16, 17, 21 or 22 anywhere in the table",
+      "values": {
+        "0": "Copyright 2019 The Recursive Project Authors (github.com/arrowtype/recursive)",
+        "1": "Recursive Sans Linear Light",
+        "2": "Regular",
+        "3": "1.077;ARRW;Recursive-SansLinearLight",
+        "4": "Recursive Sans Linear Light",
+        "5": "Version 1.077",
+        "6": "Recursive-SansLinearLight",
+        "269": "Monospace",
+        "270": "Casual",
+        "271": "Weight",
+        "272": "Slant",
+        "273": "Cursive",
+        "274": "Mono Linear Light",
+        "275": "RecursiveMonoLnr-Light",
+        "338": "Sans Linear Light",
+        "339": "RecursiveSansLnr-Light",
+        "342": "Sans Casual Light",
+        "346": "Sans Linear",
+        "394": "Sans Linear ExtraBlack",
+        "401": "RecursiveSansCsl-XBlkItalic",
+        "402": "Sans",
+        "403": "Mono",
+        "404": "Linear",
+        "405": "Light",
+        "406": "Regular",
+        "411": "Black",
+        "412": "ExtraBlack",
+        "413": "Upright",
+        "414": "Italic"
+      },
+      "axes": "MONO 0/0/1, CASL 0/0/1, wght 300/300/1000, slnt -15/0/0, CRSV 0/0.5/1; 64 named instances; STAT with five design axis records (name IDs 269-273) and eleven axis values (402, 404, 405-412, 413)"
+    },
+    "two-axis": {
+      "axes": "wght and wdth, both including 400 and 100 respectively in range so that a pin of 400/100 is exact and needs no clamping",
+      "name_records": "platform 3 / encoding 1 / language 1033 only. No Macintosh records, no non-English records.",
+      "name_ids_present": "1, 2, 3, 4, 5, 6 and the fvar/STAT name IDs above 255. No 16, 17, 21 or 22.",
+      "values": {
+        "1": "Two Axis",
+        "2": "Regular",
+        "3": "1.000;TEST;TwoAxis-Regular",
+        "4": "Two Axis Regular",
+        "5": "Version 1.000",
+        "6": "TwoAxis-Regular"
+      }
+    },
+    "named-instances": {
+      "axes": "wght 300/400/900 and wdth 75/100/125",
+      "instances": "at least five fvar named instances, so the fixture is an extended typographic family in the sense of the name spec's discussion of name IDs 1 and 16",
+      "gsub": "a GSUB 'ss01' feature whose FeatureParams has UINameID 256",
+      "name_records": [
+        "3/1/1033: 0, 1, 2, 3, 4, 5, 6, 16, 17, 21, 22, 256",
+        "1/0/0 (Macintosh Roman): 1, 2, 4, 6, 16",
+        "3/1/1031 (Windows German): 1, 2, 16, 17"
+      ],
+      "values": {
+        "3/1/1033": {
+          "0": "Copyright 2024 the Slice conformance corpus",
+          "1": "Testable Sans Caption",
+          "2": "Regular",
+          "3": "1.000;TEST;TestableSansCaption-Regular",
+          "4": "Testable Sans Caption",
+          "5": "Version 1.000",
+          "6": "TestableSansCaption-Regular",
+          "16": "Testable Sans",
+          "17": "Caption",
+          "21": "Testable Sans Caption",
+          "22": "Regular",
+          "256": "Alternate a"
+        },
+        "1/0/0": {
+          "1": "Testable Sans Caption Mac",
+          "2": "Regular",
+          "4": "Testable Sans Caption Mac",
+          "6": "TestableSansCaption-Mac",
+          "16": "Testable Sans Mac"
+        },
+        "3/1/1031": {
+          "1": "Pruefbare Grotesk Caption",
+          "2": "Standard",
+          "16": "Prüfbare Grotesk",
+          "17": "Überschrift"
+        }
+      },
+      "why_these_values": "The 3/1/1033 set is modelled on the Minion Pro Caption row of the name table specification's extended non-WWS family example (name ID 1 'Minion Pro Capt', 2 'Regular', 16 'Minion Pro', 17 'Caption', 21 'Minion Pro Caption', 22 'Regular'), so the fixture is a font for which the specification says all four of 16, 17, 21 and 22 belong. The Macintosh strings deliberately differ from the Windows English ones so that a case can tell which record an implementation read. The German strings carry non-ASCII characters so that a case can tell whether a foreign-language record survived byte-identical."
+    }
+  },
+  "_proposed_checks": [
+    {
+      "kind": "name_record_at",
+      "fields": [
+        "id",
+        "platform",
+        "encoding",
+        "language",
+        "equals"
+      ],
+      "passes_when": "the name record with that (platformID, encodingID, languageID, nameID) key exists and its decoded string equals `equals`",
+      "justification": "The listed `name_record` kind is hard-wired to 3/1/1033. Claim D2 is precisely that only 3/1/1033 is read and written, and the only way to test the 'only' half is to assert that records on other keys are unchanged. The name table specification defines a record's identity as the full four-part key -- 'name records must be sorted first by platform ID, then by platform-specific encoding ID, then by language ID, and then by name ID' -- so a check that can address only one key cannot express what happened to the table."
+    },
+    {
+      "kind": "name_absent_at",
+      "fields": [
+        "id",
+        "platform",
+        "encoding",
+        "language"
+      ],
+      "passes_when": "no record with that four-part key exists",
+      "justification": "Needed to assert that an implementation did not invent records on platforms the editor never claimed to write. The specification notes that 'strings for the Macintosh platform (platform ID 1) use platform-specific single- or double-byte encodings', so a tool that mirrored an edit onto platform 1 could not represent arbitrary user text there; a case has to be able to say the mirror did not happen."
+    },
+    {
+      "kind": "name_record_count",
+      "fields": [
+        "id",
+        "equals"
+      ],
+      "passes_when": "the number of records in the table with that nameID, across all platforms, encodings and languages, equals `equals`",
+      "justification": "Cheaper and more robust than enumerating every key when the property under test is 'editing one localisation neither duplicated nor deleted the others'."
+    },
+    {
+      "kind": "name_encoding",
+      "fields": [
+        "id",
+        "platform",
+        "encoding",
+        "language",
+        "equals"
+      ],
+      "passes_when": "the record's stored bytes are in the named encoding (`utf_16_be`, `mac_roman`, ...), as reported by fontTools NameRecord.getEncoding()",
+      "justification": "The name table specification states that for the Windows platform 'all string data for platform 3 must be encoded in UTF-16BE' (outside the code-page encodings 3, 4 and 5). A round-trip check through a decoder cannot distinguish a correctly encoded record from one that a decoder happened to recover; this asserts the bytes on disk, which is what the specification constrains."
+    },
+    {
+      "kind": "name_records_sorted",
+      "fields": [],
+      "passes_when": "the compiled records appear in ascending order of (platformID, encodingID, languageID, nameID)",
+      "justification": "Directly required: 'name records must be sorted first by platform ID, then by platform-specific encoding ID, then by language ID, and then by name ID.' A tool that appends edited records to the end of the array produces a table that violates this, and no listed check would notice. fontTools sorts on compile, so the original satisfies it for free; a reimplementation that writes its own name table does not."
+    },
+    {
+      "kind": "name_references_resolve",
+      "fields": [],
+      "passes_when": "every nameID referenced from fvar (axisNameID, instance subfamilyNameID, instance postScriptNameID other than 0xFFFF), from STAT (AxisNameID, ValueNameID, ElidedFallbackNameID) and from GSUB/GPOS FeatureParams (UINameID, and the stylistic-set and character-variant label IDs) has at least one matching record in the name table",
+      "justification": "The listed `no_dangling_name_ids` check tests one direction -- that no name record is orphaned -- and defines a reference as coming from fvar or STAT only. Two things it cannot see: (a) a nameID above 255 that is referenced from GSUB FeatureParams is legitimate, since the specification reserves 'name IDs 256 to 32767, inclusive ... for font-specific names such as those referenced by a font's layout features', so `no_dangling_name_ids` gives a false failure on any font with a stylistic-set label; (b) the opposite fault, a surviving fvar or STAT record pointing at a name record that an edit deleted, which is the failure mode that clearing a name cell can actually cause. This check covers the direction that matters and does not misjudge layout labels."
+    }
+  ],
+  "cases": [
+    {
+      "id": "names.d1.nine-editable-records-are-written",
+      "title": "All nine editable rows reach the output as 3/1/1033 records",
+      "covers": [
+        "D1",
+        "D2",
+        "D3",
+        "D4"
+      ],
+      "class": "slice-ui",
+      "rationale": "The editor exposes exactly nine name IDs -- 1, 2, 3, 4, 6, 16, 17, 21, 22 -- and the name specification says of these that 'the key information for this table for Microsoft platforms relates to the use of name IDs 1, 2, 4, 16 and 17' and that 'fonts should include all of these strings for the broadest application compatibility'. A slicer that offered a row and then dropped what was typed into it would be worse than not offering the row. This case is the baseline for the whole area: nine cells in, nine records out, each holding exactly the typed string.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "400",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "names": {
+          "1": "Sliced Family",
+          "2": "Sliced Subfamily",
+          "3": "1.077;SLCE;Sliced-Unique",
+          "4": "Sliced Full Name",
+          "6": "Sliced-Postscript",
+          "16": "Sliced Typographic",
+          "17": "Sliced Typographic Sub",
+          "21": "Sliced WWS",
+          "22": "Sliced WWS Sub"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "name_record",
+            "id": 1,
+            "equals": "Sliced Family"
+          },
+          {
+            "kind": "name_record",
+            "id": 2,
+            "equals": "Sliced Subfamily"
+          },
+          {
+            "kind": "name_record",
+            "id": 3,
+            "equals": "1.077;SLCE;Sliced-Unique"
+          },
+          {
+            "kind": "name_record",
+            "id": 4,
+            "equals": "Sliced Full Name"
+          },
+          {
+            "kind": "name_record",
+            "id": 6,
+            "equals": "Sliced-Postscript"
+          },
+          {
+            "kind": "name_record",
+            "id": 16,
+            "equals": "Sliced Typographic"
+          },
+          {
+            "kind": "name_record",
+            "id": 17,
+            "equals": "Sliced Typographic Sub"
+          },
+          {
+            "kind": "name_record",
+            "id": 21,
+            "equals": "Sliced WWS"
+          },
+          {
+            "kind": "name_record",
+            "id": 22,
+            "equals": "Sliced WWS Sub"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d1.nine-rows-on-a-font-that-already-has-them",
+      "title": "Editing all nine rows overwrites the records the font already had",
+      "covers": [
+        "D1",
+        "D4"
+      ],
+      "class": "slice-ui",
+      "rationale": "The previous case creates records that were absent; this one replaces records that were present, which is a different code path in any implementation that treats 16/17/21/22 as optional. Name ID 17 'must be unique within a particular typographic family', so an implementation that appended a second 3/1/1033 record for the same ID instead of replacing the first would produce a table with two competing typographic subfamily names. Exactly one record per key must come out.",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wght": "700",
+          "wdth": "100"
+        },
+        "names": {
+          "1": "Testable Sans Caption SmBd",
+          "2": "Bold",
+          "3": "1.000;TEST;TestableSansCaption-Bold",
+          "4": "Testable Sans Caption Bold",
+          "6": "TestableSansCaption-Bold",
+          "16": "Testable Sans",
+          "17": "Bold Caption",
+          "21": "Testable Sans Caption",
+          "22": "Bold"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_record",
+            "id": 1,
+            "equals": "Testable Sans Caption SmBd"
+          },
+          {
+            "kind": "name_record",
+            "id": 2,
+            "equals": "Bold"
+          },
+          {
+            "kind": "name_record",
+            "id": 3,
+            "equals": "1.000;TEST;TestableSansCaption-Bold"
+          },
+          {
+            "kind": "name_record",
+            "id": 4,
+            "equals": "Testable Sans Caption Bold"
+          },
+          {
+            "kind": "name_record",
+            "id": 6,
+            "equals": "TestableSansCaption-Bold"
+          },
+          {
+            "kind": "name_record",
+            "id": 16,
+            "equals": "Testable Sans"
+          },
+          {
+            "kind": "name_record",
+            "id": 17,
+            "equals": "Bold Caption"
+          },
+          {
+            "kind": "name_record",
+            "id": 21,
+            "equals": "Testable Sans Caption"
+          },
+          {
+            "kind": "name_record",
+            "id": 22,
+            "equals": "Bold"
+          },
+          {
+            "kind": "name_record_count",
+            "id": 17,
+            "equals": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d6.version-string-is-read-only",
+      "title": "Name ID 5 is read-only, and other non-editable records are carried through",
+      "covers": [
+        "D6",
+        "D1"
+      ],
+      "class": "slice-ui",
+      "rationale": "The editor reads name ID 5 only to show a version in the status bar; there is no row for it, so the string must be preserved, and the same goes for every other name ID outside the nine. The name specification requires ID 5 to “begin with the pattern Version <number>.<number>” and notes that “the first such match in the string can be used by installation software to compare font versions”, so a slicer that blanked or bumped it would change how installers treat the file. ID 0 is the vendor's copyright notice, which no font tool has any business rewriting. The case edits five rows that the editor does own, to show that doing so perturbs neither.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "1000",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "names": {
+          "1": "Sliced Family",
+          "2": "Regular",
+          "3": "x",
+          "4": "Sliced Family",
+          "6": "Sliced-Family"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_record",
+            "id": 5,
+            "equals": "Version 1.077"
+          },
+          {
+            "kind": "name_present",
+            "id": 5
+          },
+          {
+            "kind": "name_record",
+            "id": 0,
+            "equals": "Copyright 2019 The Recursive Project Authors (github.com/arrowtype/recursive)"
+          },
+          {
+            "kind": "name_record",
+            "id": 1,
+            "equals": "Sliced Family"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d2.only-windows-english-is-written",
+      "title": "Editing name ID 1 changes the 3/1/1033 record and no other",
+      "covers": [
+        "D2"
+      ],
+      "class": "slice-ui",
+      "rationale": "The editor's contract is one localisation: Windows, Unicode BMP, English (US). The name specification blesses that key -- 'when building a Unicode font for Windows, the platform ID should be 3 and the encoding ID should be 1' -- but it also treats every other record as an independent string with its own language, and a tool has no way to translate the user's text into German or to re-encode it for Mac Roman. Writing the edit anywhere else would either corrupt or mistranslate those records, so the Macintosh and German records must come out exactly as they went in.",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        },
+        "names": {
+          "1": "Sliced Caption"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_record",
+            "id": 1,
+            "equals": "Sliced Caption"
+          },
+          {
+            "kind": "name_record_at",
+            "id": 1,
+            "platform": 1,
+            "encoding": 0,
+            "language": 0,
+            "equals": "Testable Sans Caption Mac"
+          },
+          {
+            "kind": "name_record_at",
+            "id": 1,
+            "platform": 3,
+            "encoding": 1,
+            "language": 1031,
+            "equals": "Pruefbare Grotesk Caption"
+          },
+          {
+            "kind": "name_record_count",
+            "id": 1,
+            "equals": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d2.macintosh-records-survive-a-slice",
+      "title": "A font with Macintosh platform records keeps every one of them",
+      "covers": [
+        "D2",
+        "G10"
+      ],
+      "class": "spec",
+      "rationale": "Platform 1 records are a separate, legitimate part of the table -- the specification lists platform ID 1 as valid in the name table and notes that 'many newer platforms can use strings intended for different platforms if a font does not include strings for that platform'. Nothing about narrowing a design space invalidates a Macintosh string. All five of the fixture's Mac records, including its name ID 16, must be present and unchanged after a full pin with the name editor untouched.",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_record_at",
+            "id": 1,
+            "platform": 1,
+            "encoding": 0,
+            "language": 0,
+            "equals": "Testable Sans Caption Mac"
+          },
+          {
+            "kind": "name_record_at",
+            "id": 2,
+            "platform": 1,
+            "encoding": 0,
+            "language": 0,
+            "equals": "Regular"
+          },
+          {
+            "kind": "name_record_at",
+            "id": 4,
+            "platform": 1,
+            "encoding": 0,
+            "language": 0,
+            "equals": "Testable Sans Caption Mac"
+          },
+          {
+            "kind": "name_record_at",
+            "id": 6,
+            "platform": 1,
+            "encoding": 0,
+            "language": 0,
+            "equals": "TestableSansCaption-Mac"
+          },
+          {
+            "kind": "name_record_at",
+            "id": 16,
+            "platform": 1,
+            "encoding": 0,
+            "language": 0,
+            "equals": "Testable Sans Mac"
+          },
+          {
+            "kind": "name_encoding",
+            "id": 1,
+            "platform": 1,
+            "encoding": 0,
+            "language": 0,
+            "equals": "mac_roman"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d2.non-english-windows-records-survive-a-slice",
+      "title": "German Windows records are preserved when the English ones are edited",
+      "covers": [
+        "D2"
+      ],
+      "class": "spec",
+      "rationale": "The name table exists to hold 'multilingual strings', and the specification's whole design is that 'later, the font can be localized and the strings translated or added'. A localisation is not derived from the English string and cannot be regenerated, so losing it is unrecoverable data loss. Editing the English family and subfamily must leave the 3/1/1031 records for IDs 1, 2, 16 and 17 exactly as they were. The German strings carry U+00FC and U+00DC, which survive a UTF-16BE round trip but not a naive Latin-1 or ASCII re-encode, so the case also pins the on-disk encoding the specification demands for platform 3.",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wght": "900",
+          "wdth": "100"
+        },
+        "names": {
+          "1": "Testable Sans Caption Black",
+          "2": "Regular"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_record_at",
+            "id": 1,
+            "platform": 3,
+            "encoding": 1,
+            "language": 1031,
+            "equals": "Pruefbare Grotesk Caption"
+          },
+          {
+            "kind": "name_record_at",
+            "id": 2,
+            "platform": 3,
+            "encoding": 1,
+            "language": 1031,
+            "equals": "Standard"
+          },
+          {
+            "kind": "name_record_at",
+            "id": 16,
+            "platform": 3,
+            "encoding": 1,
+            "language": 1031,
+            "equals": "Prüfbare Grotesk"
+          },
+          {
+            "kind": "name_record_at",
+            "id": 17,
+            "platform": 3,
+            "encoding": 1,
+            "language": 1031,
+            "equals": "Überschrift"
+          },
+          {
+            "kind": "name_encoding",
+            "id": 16,
+            "platform": 3,
+            "encoding": 1,
+            "language": 1031,
+            "equals": "utf_16_be"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d2.editor-reads-windows-english-not-macintosh",
+      "title": "With the editor untouched the Windows English strings are preserved, not replaced by the Mac ones",
+      "covers": [
+        "D2",
+        "D3"
+      ],
+      "class": "slice-ui",
+      "rationale": "The fixture's Macintosh strings deliberately differ from its Windows English strings, so this case can tell which record an implementation loaded into its cells. Since the editor reads 3/1/1033, an untouched slice must write those same values back; if it had read platform 1 it would write 'Testable Sans Caption Mac' into the Windows record and quietly rename the font. The specification's note that applications 'might display incorrect strings ... if strings for the current platform are not included' is precisely why the two must not be conflated.",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_record",
+            "id": 1,
+            "equals": "Testable Sans Caption"
+          },
+          {
+            "kind": "name_record",
+            "id": 4,
+            "equals": "Testable Sans Caption"
+          },
+          {
+            "kind": "name_record",
+            "id": 6,
+            "equals": "TestableSansCaption-Regular"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d2.no-macintosh-record-is-invented",
+      "title": "Editing a name on a Windows-only font does not create a Macintosh record",
+      "covers": [
+        "D2"
+      ],
+      "class": "slice-ui",
+      "rationale": "two-axis has no platform 1 records at all. An implementation that helpfully mirrored the edit onto the Macintosh platform would be inventing data, and would have to encode arbitrary user text in a 'platform-specific single- or double-byte encoding' that in general cannot represent it. The output must have the same set of platforms as the input.",
+      "fixture": "two-axis",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        },
+        "names": {
+          "1": "Two Axis Sliced"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_record",
+            "id": 1,
+            "equals": "Two Axis Sliced"
+          },
+          {
+            "kind": "name_absent_at",
+            "id": 1,
+            "platform": 1,
+            "encoding": 0,
+            "language": 0
+          },
+          {
+            "kind": "name_record_count",
+            "id": 1,
+            "equals": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d2.records-remain-sorted",
+      "title": "The output name table is still in the order the specification requires",
+      "covers": [
+        "D2",
+        "D4"
+      ],
+      "class": "spec",
+      "rationale": "The specification is explicit: 'name records must be sorted first by platform ID, then by platform-specific encoding ID, then by language ID, and then by name ID.' Editing the table adds and removes records, and an implementation that appends new records to the end of the array, or leaves a hole where a removed one was, produces a table that violates that requirement even though every string in it is right. This is checked on the case that both adds (16, 17) and removes (21, 22) records.",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        },
+        "names": {
+          "16": "Testable Sans",
+          "17": "Caption Regular",
+          "21": "",
+          "22": ""
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_records_sorted"
+          },
+          {
+            "kind": "parses_as_font"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d3.blank-mandatory-cells-still-write-records",
+      "title": "Clearing rows 1, 2, 3, 4 and 6 leaves five empty records, not five absent ones",
+      "covers": [
+        "D3"
+      ],
+      "class": "slice-ui",
+      "rationale": "Name IDs 1, 2, 4 and 6 are the strings every platform looks up first, and the specification says fonts 'should include all of these strings for the broadest application compatibility'. Deleting them would leave a font that names itself nowhere; writing whatever the user typed, including nothing, at least keeps the required records present, and makes the emptiness visible to any linter rather than turning it into a missing record that some consumers silently paper over. The distinction between an empty record and no record is real and this case pins the first half of it.",
+      "fixture": "two-axis",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        },
+        "names": {
+          "1": "",
+          "2": "",
+          "3": "",
+          "4": "",
+          "6": ""
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_present",
+            "id": 1
+          },
+          {
+            "kind": "name_present",
+            "id": 2
+          },
+          {
+            "kind": "name_present",
+            "id": 3
+          },
+          {
+            "kind": "name_present",
+            "id": 4
+          },
+          {
+            "kind": "name_present",
+            "id": 6
+          },
+          {
+            "kind": "name_record",
+            "id": 1,
+            "equals": ""
+          },
+          {
+            "kind": "name_record",
+            "id": 2,
+            "equals": ""
+          },
+          {
+            "kind": "name_record",
+            "id": 3,
+            "equals": ""
+          },
+          {
+            "kind": "name_record",
+            "id": 4,
+            "equals": ""
+          },
+          {
+            "kind": "name_record",
+            "id": 6,
+            "equals": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d3.cleared-family-is-empty-not-absent",
+      "title": "A cleared family-name cell yields a present record whose string is empty",
+      "covers": [
+        "D3",
+        "D4"
+      ],
+      "class": "slice-ui",
+      "rationale": "This is the sharp edge of the empty-versus-absent distinction, isolated on the single most important record. Name ID 1 is the string 'the user sees' in the specification's own example, and the rule for IDs 1-6 differs from the rule for 16-22: the same empty cell means 'write an empty string' here and 'delete the record' there. A checker must be able to tell the two apart, so the case asserts both that the record exists and that it is empty.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "400",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "names": {
+          "1": ""
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_present",
+            "id": 1
+          },
+          {
+            "kind": "name_record",
+            "id": 1,
+            "equals": ""
+          },
+          {
+            "kind": "name_absent",
+            "id": 1,
+            "not": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d3.untouched-editor-preserves-the-five",
+      "title": "An untouched name editor writes the font's own strings back unchanged",
+      "covers": [
+        "D3",
+        "D5"
+      ],
+      "class": "slice-ui",
+      "rationale": "Because the five mandatory rows are loaded from the font and then always written, doing nothing must be a no-op on those records. Any drift here -- a trailing space, a re-encoding, a substituted value from another platform -- would mean the editor cannot be left alone safely, which is the property every other case in this area depends on.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "400",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_record",
+            "id": 1,
+            "equals": "Recursive Sans Linear Light"
+          },
+          {
+            "kind": "name_record",
+            "id": 2,
+            "equals": "Regular"
+          },
+          {
+            "kind": "name_record",
+            "id": 3,
+            "equals": "1.077;ARRW;Recursive-SansLinearLight"
+          },
+          {
+            "kind": "name_record",
+            "id": 4,
+            "equals": "Recursive Sans Linear Light"
+          },
+          {
+            "kind": "name_record",
+            "id": 6,
+            "equals": "Recursive-SansLinearLight"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d3.names-are-not-regenerated-from-the-pinned-location",
+      "title": "Slicing to a different weight does not rewrite the family and subfamily names",
+      "covers": [
+        "D3",
+        "G7"
+      ],
+      "class": "fonttools",
+      "rationale": "fontTools can regenerate name records from STAT axis values, but only when asked (instantiateVariableFont's updateFontNames defaults to False and the original does not pass it), so pinning wght=1000 on this fixture leaves name ID 1 saying 'Recursive Sans Linear Light' while OS/2.usWeightClass becomes 1000 -- verified with fontTools 4.62.1. That mismatch is exactly why the Name Editor exists, and it must be the user's decision rather than a silent rewrite: the specification's four-style rule means the correct new name ID 1 for an ExtraBlack cut is a judgement about family grouping ('the Font Family name for the Arial Black font is Arial Black'), not something a slicer can derive. This case pins the behaviour so neither implementation starts guessing.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "1000",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_record",
+            "id": 1,
+            "equals": "Recursive Sans Linear Light"
+          },
+          {
+            "kind": "name_record",
+            "id": 2,
+            "equals": "Regular"
+          },
+          {
+            "kind": "os2_field",
+            "field": "usWeightClass",
+            "equals": 1000
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d4.typographic-names-written-when-non-empty",
+      "title": "Non-empty rows 16 and 17 create records on a font that had none",
+      "covers": [
+        "D4"
+      ],
+      "class": "spec",
+      "rationale": "recursive-vf has no name ID 16 or 17 at all, so this exercises creation rather than replacement. The specification recommends exactly this for a sliced family member: 'for extended typographic families that includes fonts other than the four basic styles ... it is strongly recommended that name IDs 16 and 17 be used in fonts to create an extended, typographic grouping.' A user slicing one cut out of a five-axis variable font is producing precisely such a family member, so the editor must be able to add these records.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "1000",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "names": {
+          "1": "Recursive Sans Linear ExtraBlack",
+          "2": "Regular",
+          "16": "Recursive Sans Linear",
+          "17": "ExtraBlack"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_record",
+            "id": 16,
+            "equals": "Recursive Sans Linear"
+          },
+          {
+            "kind": "name_record",
+            "id": 17,
+            "equals": "ExtraBlack"
+          },
+          {
+            "kind": "name_absent",
+            "id": 21
+          },
+          {
+            "kind": "name_absent",
+            "id": 22
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d4.clearing-16-removes-only-16",
+      "title": "Clearing row 16 deletes the typographic family record and leaves 17, 21 and 22",
+      "covers": [
+        "D4"
+      ],
+      "class": "slice-ui",
+      "rationale": "For IDs 16, 17, 21 and 22 an empty cell means 'this font should not have this record', and the specification supports removal being meaningful: 'if name ID 16 is absent, then name ID 1 is considered to be the typographic family name.' Absence is therefore a defined state with a defined fallback, unlike an empty string, which would advertise a typographic family called nothing. The other three records must be untouched, since the user cleared one cell and not four.",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        },
+        "names": {
+          "16": ""
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_absent",
+            "id": 16
+          },
+          {
+            "kind": "name_record",
+            "id": 17,
+            "equals": "Caption"
+          },
+          {
+            "kind": "name_record",
+            "id": 21,
+            "equals": "Testable Sans Caption"
+          },
+          {
+            "kind": "name_record",
+            "id": 22,
+            "equals": "Regular"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d4.clearing-21-and-22-removes-both",
+      "title": "Clearing the two WWS rows deletes both records and leaves 16 and 17",
+      "covers": [
+        "D4"
+      ],
+      "class": "spec",
+      "rationale": "IDs 21 and 22 are conditional by design: they are 'used to provide a WWS-conformant family name in case the entries for IDs 16 and 17 do not conform to the WWS model', and the specification adds that 'if bit 8 of the OS/2 fsSelection field is set, a WWS Family Name entry should not be needed and should not be included'. So a user who slices a font down to a WWS-conformant cut has a legitimate reason to delete them, and the tool must actually delete rather than blank them -- an empty ID 21 would still count as 'an entry for this ID is included', which the specification says must correlate with fsSelection bit 8 being clear.",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        },
+        "names": {
+          "21": "",
+          "22": ""
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_absent",
+            "id": 21
+          },
+          {
+            "kind": "name_absent",
+            "id": 22
+          },
+          {
+            "kind": "name_record",
+            "id": 16,
+            "equals": "Testable Sans"
+          },
+          {
+            "kind": "name_record",
+            "id": 17,
+            "equals": "Caption"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d4.clearing-all-four-optional-rows",
+      "title": "Clearing 16, 17, 21 and 22 removes all four when the user asks for it",
+      "covers": [
+        "D4"
+      ],
+      "class": "slice-ui",
+      "rationale": "This is the output the original produces for every font it touches, but here it is produced because the user deliberately emptied four cells, which makes it correct rather than accidental. The distinction is the whole of D5: the same bytes are right when requested and wrong when imposed. Keeping this case alongside the D5 cases makes the corpus state plainly that the deletion mechanism is fine and only its default is not.",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        },
+        "names": {
+          "16": "",
+          "17": "",
+          "21": "",
+          "22": ""
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_absent",
+            "id": 16
+          },
+          {
+            "kind": "name_absent",
+            "id": 17
+          },
+          {
+            "kind": "name_absent",
+            "id": 21
+          },
+          {
+            "kind": "name_absent",
+            "id": 22
+          },
+          {
+            "kind": "name_present",
+            "id": 1
+          },
+          {
+            "kind": "name_present",
+            "id": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d4.clearing-16-does-not-touch-other-platforms",
+      "title": "Deleting the typographic family name removes the 3/1/1033 record only",
+      "covers": [
+        "D4",
+        "D2"
+      ],
+      "class": "slice-ui",
+      "rationale": "The editor's scope is one localisation, so the deletion is scoped the same way: the Macintosh and German name ID 16 records are outside its remit and must survive. The result is a table whose English typographic family name is absent while its German one is present -- internally odd, but the alternative is a tool that silently deletes localisations the user never saw. Recording it here makes the consequence explicit rather than accidental, and gives the adjudication in section 4 something concrete to argue about.",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        },
+        "names": {
+          "16": ""
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_absent",
+            "id": 16
+          },
+          {
+            "kind": "name_record_at",
+            "id": 16,
+            "platform": 1,
+            "encoding": 0,
+            "language": 0,
+            "equals": "Testable Sans Mac"
+          },
+          {
+            "kind": "name_record_at",
+            "id": 16,
+            "platform": 3,
+            "encoding": 1,
+            "language": 1031,
+            "equals": "Prüfbare Grotesk"
+          },
+          {
+            "kind": "name_record_count",
+            "id": 16,
+            "equals": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d4.blank-optional-row-on-a-font-without-it",
+      "title": "A blank row 16 on a font that never had one produces nothing",
+      "covers": [
+        "D4"
+      ],
+      "class": "slice-ui",
+      "rationale": "two-axis has no name ID 16. A blank cell must therefore be a no-op: not a deletion of something absent, and above all not the creation of an empty record. An empty ID 16 would be worse than none, because 'if name ID 16 is absent, then name ID 1 is considered to be the typographic family name' -- the fallback only works when the record is genuinely absent.",
+      "fixture": "two-axis",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        },
+        "names": {
+          "16": "",
+          "17": "",
+          "21": "",
+          "22": ""
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_absent",
+            "id": 16
+          },
+          {
+            "kind": "name_absent",
+            "id": 17
+          },
+          {
+            "kind": "name_absent",
+            "id": 21
+          },
+          {
+            "kind": "name_absent",
+            "id": 22
+          },
+          {
+            "kind": "name_record",
+            "id": 1,
+            "equals": "Two Axis"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d4.whitespace-is-not-empty",
+      "title": "A row containing a single space is written, not treated as cleared",
+      "covers": [
+        "D4"
+      ],
+      "class": "judgement",
+      "rationale": "The boundary between 'write it' and 'delete it' is an exact string comparison against the empty string, so a cell holding one space is on the write side. Nothing in the name specification forbids a string of whitespace, and the two candidate behaviours differ materially -- one output has an ID 16 record and the other does not -- so the corpus has to pin down which. Trimming would be a silent reinterpretation of what the user typed, of the same kind the corpus rejects elsewhere (see B8); if a future version wants to reject whitespace-only input it should say so, not guess.",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        },
+        "names": {
+          "16": " "
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_present",
+            "id": 16
+          },
+          {
+            "kind": "name_record",
+            "id": 16,
+            "equals": " "
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d4.empty-versus-absent-in-one-output",
+      "title": "The same empty cell leaves an empty record at ID 4 and no record at ID 21",
+      "covers": [
+        "D3",
+        "D4"
+      ],
+      "class": "slice-ui",
+      "rationale": "This case exists to make the empty-versus-absent distinction impossible to miss: two cells are cleared in the same run, and the two outcomes are opposite. ID 4 stays because the full font name is one of the strings the specification says fonts 'should include ... for the broadest application compatibility'; ID 21 goes because it is conditional and its absence is a defined state. An implementation that treats the empty string uniformly will fail exactly one of these two checks, which is the diagnosis this case is designed to deliver.",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        },
+        "names": {
+          "4": "",
+          "21": ""
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_present",
+            "id": 4
+          },
+          {
+            "kind": "name_record",
+            "id": 4,
+            "equals": ""
+          },
+          {
+            "kind": "name_absent",
+            "id": 21
+          },
+          {
+            "kind": "name_present",
+            "id": 22
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d5.untouched-editor-preserves-typographic-names",
+      "title": "Slicing without touching the name editor keeps name IDs 16 and 17",
+      "covers": [
+        "D5",
+        "D4",
+        "D1"
+      ],
+      "class": "spec",
+      "rationale": "This is the corrected behaviour for the corpus's largest suspected defect: the original never loads IDs 16, 17, 21 or 22 into the editor, so every cell is blank, and D4's rule then deletes all four from every font it touches. The name specification makes those records load-bearing for exactly this fixture: name ID 1 'should be shared among at most four fonts that differ only in weight or style (italic/oblique)', while name ID 16's 'typographic family grouping doesn't impose any constraints on the number of faces within it', and 'if name ID 16 is absent, then name ID 1 is considered to be the typographic family name'. Delete 16 and 17 from a family with more than four styles and every face collapses onto its four-style ID 1/ID 2 grouping -- for the fixture, 'Testable Sans Caption' stops being a member of 'Testable Sans' and appears in menus as a separate family -- which is why the specification warns that applications assuming that grouping 'are likely to provide a poor user experience with variable fonts'. **The original is expected to fail this case.**",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_present",
+            "id": 16
+          },
+          {
+            "kind": "name_present",
+            "id": 17
+          },
+          {
+            "kind": "name_record",
+            "id": 16,
+            "equals": "Testable Sans"
+          },
+          {
+            "kind": "name_record",
+            "id": 17,
+            "equals": "Caption"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d5.untouched-editor-preserves-wws-names",
+      "title": "Slicing without touching the name editor keeps name IDs 21 and 22",
+      "covers": [
+        "D5",
+        "D4"
+      ],
+      "class": "spec",
+      "rationale": "The same defect strips the WWS pair. The fixture is modelled on the specification's own Minion Pro Caption example, a face whose ID 17 'includes qualifiers for some attribute other than weight, width or slope', which is the stated trigger for including IDs 21 and 22. The specification also ties them to a bit: 'if an entry for this ID is included, bit 8 should not be set', so deleting ID 21 while leaving fsSelection bit 8 clear leaves the font describing itself as neither WWS-conformant nor WWS-annotated. **The original is expected to fail this case.**",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_present",
+            "id": 21
+          },
+          {
+            "kind": "name_present",
+            "id": 22
+          },
+          {
+            "kind": "name_record",
+            "id": 21,
+            "equals": "Testable Sans Caption"
+          },
+          {
+            "kind": "name_record",
+            "id": 22,
+            "equals": "Regular"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d5.editing-one-row-does-not-strip-the-other-four",
+      "title": "Editing the family name leaves the typographic and WWS names alone",
+      "covers": [
+        "D5",
+        "D3",
+        "D4"
+      ],
+      "class": "spec",
+      "rationale": "This is the shape the defect takes in ordinary use: the user changes one string, and four unrelated records disappear. Under the corrected behaviour the four optional rows were loaded with the font's own values, so writing them back is a no-op and only name ID 1 changes. The specification's example table for an extended family shows IDs 1, 2, 16, 17, 21 and 22 being set together as a coherent set; a tool that lets a user retitle a font while silently discarding four of the six is not editing the set, it is truncating it. **The original is expected to fail this case.**",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        },
+        "names": {
+          "1": "Testable Sans Caption Sliced"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_record",
+            "id": 1,
+            "equals": "Testable Sans Caption Sliced"
+          },
+          {
+            "kind": "name_record",
+            "id": 16,
+            "equals": "Testable Sans"
+          },
+          {
+            "kind": "name_record",
+            "id": 17,
+            "equals": "Caption"
+          },
+          {
+            "kind": "name_record",
+            "id": 21,
+            "equals": "Testable Sans Caption"
+          },
+          {
+            "kind": "name_record",
+            "id": 22,
+            "equals": "Regular"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d5.typographic-names-survive-a-partial-slice",
+      "title": "A partial slice that leaves a variable font also keeps 16, 17, 21 and 22",
+      "covers": [
+        "D5",
+        "G2"
+      ],
+      "class": "spec",
+      "rationale": "The defect is in the name editor, not the instancer, so it applies equally when the output is still variable -- and the stakes are higher there, because the specification observes that 'variable fonts can include a large number of named instances, each of which will use a shared typographic family name (name ID 16)'. A variable font whose ID 16 has been deleted leaves every one of its named instances without the family name they are meant to share. **The original is expected to fail this case.**",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wdth": "100"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "has_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "name_record",
+            "id": 16,
+            "equals": "Testable Sans"
+          },
+          {
+            "kind": "name_record",
+            "id": 17,
+            "equals": "Caption"
+          },
+          {
+            "kind": "name_record",
+            "id": 21,
+            "equals": "Testable Sans Caption"
+          },
+          {
+            "kind": "name_record",
+            "id": 22,
+            "equals": "Regular"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d5.loaded-value-can-still-be-replaced",
+      "title": "Loading 16 and 17 into the editor does not make them read-only",
+      "covers": [
+        "D5",
+        "D4",
+        "D1"
+      ],
+      "class": "slice-ui",
+      "rationale": "The fix for D5 is to load all nine rows rather than five; a naive fix that loaded them but then refused to overwrite would trade one defect for another. Name ID 17 'must be unique within a particular typographic family', so a user slicing a new cut out of the family very often does need to change it. Loading and editing must compose: the loaded value appears, the typed value wins.",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wght": "900",
+          "wdth": "100"
+        },
+        "names": {
+          "17": "Black Caption"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_record",
+            "id": 17,
+            "equals": "Black Caption"
+          },
+          {
+            "kind": "name_record",
+            "id": 16,
+            "equals": "Testable Sans"
+          },
+          {
+            "kind": "name_record_count",
+            "id": 17,
+            "equals": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d5.other-platform-typographic-names-are-not-the-fix",
+      "title": "The Macintosh and German typographic names survive, which is what makes the loss inconsistent",
+      "covers": [
+        "D5",
+        "D2"
+      ],
+      "class": "slice-ui",
+      "rationale": "The original's deletion is scoped to 3/1/1033, so a font that carries typographic names in several localisations comes out with the English one missing and the others intact. That is diagnostic rather than mitigating: the specification treats the localisations as translations of one logical string, so a table asserting a German typographic family and no English one is self-contradictory, and consumers that fall back across platforms may show German to English users. Both implementations should pass this case; it exists so that the D5 adjudication has the full picture of what the original actually produces.",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_record_at",
+            "id": 16,
+            "platform": 1,
+            "encoding": 0,
+            "language": 0,
+            "equals": "Testable Sans Mac"
+          },
+          {
+            "kind": "name_record_at",
+            "id": 16,
+            "platform": 3,
+            "encoding": 1,
+            "language": 1031,
+            "equals": "Prüfbare Grotesk"
+          },
+          {
+            "kind": "name_record_at",
+            "id": 17,
+            "platform": 3,
+            "encoding": 1,
+            "language": 1031,
+            "equals": "Überschrift"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.d5.no-typographic-names-are-invented",
+      "title": "A font with no 16, 17, 21 or 22 does not acquire them",
+      "covers": [
+        "D5",
+        "D4"
+      ],
+      "class": "slice-ui",
+      "rationale": "Loading all nine rows means loading four empty ones when the font has no such records, and the correct output then has no such records either. The specification's Times New Roman example shows a font that legitimately omits all four -- 'Preferred Family. No name string present, since it is the same as name ID 1' -- so inventing them, for instance by copying ID 1 into ID 16, would add claims the font never made. recursive-vf is exactly such a font, verified: its table holds only IDs 0-6 and 269-414.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "400",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_absent",
+            "id": 16
+          },
+          {
+            "kind": "name_absent",
+            "id": 17
+          },
+          {
+            "kind": "name_absent",
+            "id": 21
+          },
+          {
+            "kind": "name_absent",
+            "id": 22
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.unicode.non-ascii-round-trips",
+      "title": "Non-ASCII text typed into a name cell comes back byte-for-byte",
+      "covers": [
+        "D2",
+        "D3"
+      ],
+      "class": "spec",
+      "rationale": "For the key the editor writes, the specification is unambiguous: 'all string data for platform 3 must be encoded in UTF-16BE', which covers the whole of the BMP, so Latin-1 accents, Greek and CJK are all representable and must survive. Verified with fontTools 4.62.1: setting this string on 3/1/1033, saving and reloading returns it unchanged. A tool that encoded to Latin-1 or dropped to ASCII would mangle names for most of the world's scripts.",
+      "fixture": "two-axis",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        },
+        "names": {
+          "1": "Ámbar Ελληνικά 日本語"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_record",
+            "id": 1,
+            "equals": "Ámbar Ελληνικά 日本語"
+          },
+          {
+            "kind": "name_encoding",
+            "id": 1,
+            "platform": 3,
+            "encoding": 1,
+            "language": 1033,
+            "equals": "utf_16_be"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.unicode.astral-plane-round-trips",
+      "title": "Characters outside the BMP survive as UTF-16 surrogate pairs",
+      "covers": [
+        "D2",
+        "D3"
+      ],
+      "class": "spec",
+      "rationale": "Windows encoding ID 1 is 'Unicode BMP', but the storage format is UTF-16BE, which encodes supplementary characters as surrogate pairs; verified with fontTools 4.62.1, U+1D11E and U+1F600 write as d834 dd1e and d83d de00 and decode back unchanged. The check is that the tool neither truncates at the BMP boundary nor splits a pair, both of which would leave lone surrogates in the string storage. Whether a font should carry such a name is a separate question from whether an editor may silently corrupt what the user typed.",
+      "fixture": "two-axis",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        },
+        "names": {
+          "4": "Two Axis 𝄞 😀"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_record",
+            "id": 4,
+            "equals": "Two Axis 𝄞 😀"
+          },
+          {
+            "kind": "parses_as_font"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.unicode.non-ascii-does-not-leak-onto-the-mac-platform",
+      "title": "A non-ASCII edit is not mirrored onto a Macintosh Roman record",
+      "covers": [
+        "D2"
+      ],
+      "class": "spec",
+      "rationale": "This is where D2's single-localisation rule earns its keep. Macintosh platform strings 'use platform-specific single- or double-byte encodings according to the specified encoding ID', and Mac Roman cannot represent most of this string, so any implementation that mirrored the edit onto 1/0/0 would have to corrupt or refuse it. The Windows record takes the new text; the Mac record keeps its old text.",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        },
+        "names": {
+          "1": "Prüfbare 日本 Caption"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_record",
+            "id": 1,
+            "equals": "Prüfbare 日本 Caption"
+          },
+          {
+            "kind": "name_record_at",
+            "id": 1,
+            "platform": 1,
+            "encoding": 0,
+            "language": 0,
+            "equals": "Testable Sans Caption Mac"
+          },
+          {
+            "kind": "name_encoding",
+            "id": 1,
+            "platform": 1,
+            "encoding": 0,
+            "language": 0,
+            "equals": "mac_roman"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.postscript.written-verbatim",
+      "title": "A valid PostScript name is written exactly as typed",
+      "covers": [
+        "D1",
+        "D3"
+      ],
+      "class": "spec",
+      "rationale": "Name ID 6 is the most constrained of the nine: 'when translated to ASCII, the name string must be no longer than 63 characters and restricted to the printable ASCII subset, codes 33 to 126, except for the 10 characters [ ] ( ) { } < > / %'. A conforming value must therefore pass through untouched -- no case folding, no space substitution, no truncation -- because the string is used to invoke the font in a PostScript interpreter and any alteration breaks that lookup.",
+      "fixture": "two-axis",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        },
+        "names": {
+          "6": "TwoAxis-SlicedRegular"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_record",
+            "id": 6,
+            "equals": "TwoAxis-SlicedRegular"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.postscript.invalid-value-is-not-silently-repaired",
+      "title": "A PostScript name containing a space is written unchanged rather than mangled",
+      "covers": [
+        "D1",
+        "D3"
+      ],
+      "class": "judgement",
+      "rationale": "A space is outside the printable-ASCII subset the specification allows for name ID 6, so this input is not conformant -- but the editor performs no validation, and the two available behaviours are 'write it as typed' and 'quietly rewrite it', of which the second is strictly worse: the user would ship a name they never chose and never saw. Refusing the job would also be defensible, and if the project adopts that it should be recorded as a new claim in the behaviour map, not arrived at by one implementation guessing. Until then the contract is verbatim, and a validator's job is to complain about it afterwards.",
+      "fixture": "two-axis",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        },
+        "names": {
+          "6": "Two Axis Sliced"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_record",
+            "id": 6,
+            "equals": "Two Axis Sliced"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.g10.instance-names-pruned-on-full-pin",
+      "title": "Pinning every axis drops the name records that only named fvar instances",
+      "covers": [
+        "G10",
+        "G1"
+      ],
+      "class": "fonttools",
+      "rationale": "With no fvar left, the 64 instance subfamily and PostScript name records reference nothing; the specification reserves 'name IDs 256 to 32767, inclusive ... for font-specific names', so these are private to the font and worthless once their referrer is gone. Verified with fontTools 4.62.1: pinning MONO=0, CASL=0, wght=400, slnt=0, CRSV=0.5 removes IDs 274 through 401 (except those still reachable from STAT). The user-facing records at IDs 1-6 are unaffected.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "400",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "name_absent",
+            "id": 274
+          },
+          {
+            "kind": "name_absent",
+            "id": 275
+          },
+          {
+            "kind": "name_absent",
+            "id": 346
+          },
+          {
+            "kind": "name_absent",
+            "id": 401
+          },
+          {
+            "kind": "name_present",
+            "id": 1
+          },
+          {
+            "kind": "name_present",
+            "id": 6
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.g10.exact-surviving-name-ids-after-a-full-pin",
+      "title": "Exactly sixteen name IDs remain after pinning Recursive to Sans Linear Regular",
+      "covers": [
+        "G10",
+        "G5"
+      ],
+      "class": "fonttools",
+      "rationale": "The pruning rule is not 'drop what nothing references' but 'drop the IDs that fvar or STAT used to reference and no longer do', applied only to IDs above 255. Verified with fontTools 4.62.1 at MONO=0, CASL=0, wght=400, slnt=0, CRSV=0.5, the surviving set is exactly {0-6} plus the five STAT design-axis names {269-273} plus the four STAT axis values that match the pinned location: 402 'Sans', 404 'Linear', 406 'Regular', 413 'Upright'. Stating the whole set, rather than a few members, is what makes this case able to catch over-pruning as well as under-pruning.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "400",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_ids_subset_of",
+            "ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              269,
+              270,
+              271,
+              272,
+              273,
+              402,
+              404,
+              406,
+              413
+            ]
+          },
+          {
+            "kind": "name_present",
+            "id": 402
+          },
+          {
+            "kind": "name_present",
+            "id": 404
+          },
+          {
+            "kind": "name_present",
+            "id": 406
+          },
+          {
+            "kind": "name_present",
+            "id": 413
+          },
+          {
+            "kind": "name_absent",
+            "id": 403
+          },
+          {
+            "kind": "name_absent",
+            "id": 405
+          },
+          {
+            "kind": "name_absent",
+            "id": 414
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.g10.axis-name-survives-its-own-axis-being-pinned",
+      "title": "The Weight axis name record survives even though wght was pinned away",
+      "covers": [
+        "G10",
+        "G5"
+      ],
+      "class": "fonttools",
+      "rationale": "This is the subtlety that makes 'drop unused' the wrong summary. fvar is gone, so nothing in fvar references name ID 271 'Weight' any more -- but STAT keeps its design axis records in full (G5), and the specification requires those records to carry an AxisNameID, so 271 is still referenced and must stay. Verified with fontTools 4.62.1: all five axis-name records, 269 to 273, survive a full pin. An implementation that pruned by walking fvar alone would delete records that STAT still points at, leaving a STAT table with dangling name IDs.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "400",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "has_table",
+            "table": "STAT"
+          },
+          {
+            "kind": "name_record",
+            "id": 271,
+            "equals": "Weight"
+          },
+          {
+            "kind": "name_record",
+            "id": 269,
+            "equals": "Monospace"
+          },
+          {
+            "kind": "name_record",
+            "id": 273,
+            "equals": "Cursive"
+          },
+          {
+            "kind": "name_references_resolve"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.g10.reserved-name-ids-are-never-pruned",
+      "title": "Name IDs 255 and below are outside the pruning rule entirely",
+      "covers": [
+        "G10",
+        "D4"
+      ],
+      "class": "spec",
+      "rationale": "The specification partitions the number space: 'name IDs 26 to 255, inclusive, are reserved for future standard names. Name IDs 256 to 32767, inclusive, are reserved for font-specific names such as those referenced by a font's layout features.' Only the second range can be private to fvar or STAT, so only it can be pruned; a standard name ID means the same thing to every consumer whether or not any table points at it. Verified with fontTools 4.62.1: adding IDs 16, 17, 21 and 22 to recursive-vf and then pinning every axis leaves all four, along with 0 and 5, in place -- so any loss of those records is attributable to the name editor and not to the instancer.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "400",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "names": {
+          "16": "Recursive",
+          "17": "Sans Linear",
+          "21": "Recursive Sans",
+          "22": "Linear"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_present",
+            "id": 0
+          },
+          {
+            "kind": "name_present",
+            "id": 5
+          },
+          {
+            "kind": "name_record",
+            "id": 16,
+            "equals": "Recursive"
+          },
+          {
+            "kind": "name_record",
+            "id": 17,
+            "equals": "Sans Linear"
+          },
+          {
+            "kind": "name_record",
+            "id": 21,
+            "equals": "Recursive Sans"
+          },
+          {
+            "kind": "name_record",
+            "id": 22,
+            "equals": "Linear"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.g10.partial-slice-keeps-the-instances-it-still-has",
+      "title": "A partial slice prunes only the instance names whose instances went away",
+      "covers": [
+        "G10",
+        "G4",
+        "G2"
+      ],
+      "class": "fonttools",
+      "rationale": "Pinning MONO, CASL, slnt and CRSV while leaving wght free reduces Recursive's 64 named instances to the 8 upright Sans Linear ones, and only the name records of the other 56 may go. Verified with fontTools 4.62.1: IDs 338/339, 346/347 and 394/395 -- Sans Linear Light, Sans Linear and Sans Linear ExtraBlack with their PostScript names -- survive, while the Mono (274) and Sans Casual (342) instance names are removed. The surviving fvar records must still resolve, since the specification requires an instance's subfamilyNameID to name an entry 'in the name table'. Recursive-VF carries no layout-feature name labels, so on this fixture the stronger statement also holds: every surviving ID above 255 is still reachable from fvar or STAT.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "has_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "wght"
+            ]
+          },
+          {
+            "kind": "name_record",
+            "id": 338,
+            "equals": "Sans Linear Light"
+          },
+          {
+            "kind": "name_record",
+            "id": 339,
+            "equals": "RecursiveSansLnr-Light"
+          },
+          {
+            "kind": "name_record",
+            "id": 346,
+            "equals": "Sans Linear"
+          },
+          {
+            "kind": "name_record",
+            "id": 394,
+            "equals": "Sans Linear ExtraBlack"
+          },
+          {
+            "kind": "name_absent",
+            "id": 274
+          },
+          {
+            "kind": "name_absent",
+            "id": 342
+          },
+          {
+            "kind": "name_references_resolve"
+          },
+          {
+            "kind": "no_dangling_name_ids"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.g10.no-orphaned-variation-names-after-a-full-pin",
+      "title": "A fully pinned font has no leftover name records that only variation tables used",
+      "covers": [
+        "G10",
+        "G1"
+      ],
+      "class": "fonttools",
+      "rationale": "Stated as a property rather than an ID list, so it holds whatever the fixture's numbering turns out to be: after pinning every axis, every remaining name ID above 255 must still be reachable from fvar or STAT. The specification requires axisNameID to be 'greater than 255 and less than 32768' and instance subfamilyNameID to be 2, 17, or likewise above 255, so the variation-owned records are exactly the ones this check can see. Leaving them behind would bloat the file with strings no consumer can reach.",
+      "fixture": "two-axis",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "no_dangling_name_ids"
+          },
+          {
+            "kind": "name_present",
+            "id": 1
+          },
+          {
+            "kind": "name_present",
+            "id": 2
+          },
+          {
+            "kind": "name_present",
+            "id": 4
+          },
+          {
+            "kind": "name_present",
+            "id": 6
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.g10.layout-feature-label-survives",
+      "title": "A stylistic-set UI label is not pruned, even though fvar and STAT never referenced it",
+      "covers": [
+        "G10"
+      ],
+      "class": "spec",
+      "rationale": "This is the case that shows the rule is not 'drop every name ID nothing in fvar or STAT points at'. The specification reserves 'name IDs 256 to 32767, inclusive ... for font-specific names such as those referenced by a font's layout features', and a GSUB FeatureParams UINameID is exactly such a reference; fontTools prunes only IDs that were variation-referenced before the operation and are not after, so a label that was never in that set is never a candidate. Deleting it would leave the ss01 feature pointing at nothing and strip the name a user interface shows for the feature. Note that the listed `no_dangling_name_ids` check would wrongly fail this output, which is why `name_references_resolve` is proposed above and used here instead.",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wght": "400",
+          "wdth": "100"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "name_present",
+            "id": 256
+          },
+          {
+            "kind": "name_record",
+            "id": 256,
+            "equals": "Alternate a"
+          },
+          {
+            "kind": "name_references_resolve"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.g10.pruning-happens-before-the-name-edits",
+      "title": "Records written by the editor are not pruned by the instancer that ran before it",
+      "covers": [
+        "G10",
+        "D3",
+        "D4"
+      ],
+      "class": "slice-ui",
+      "rationale": "Slicing runs first and the name edits second, so nothing the user typed can be pruned; the ordering matters because a tool that edited first and instanced second would have any newly written ID above 255 swept away. All nine editable IDs are 255 or below and so are safe either way, but the case fixes the observable end state: after a full pin the edited strings are present and the pruned instance names are still gone.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "1",
+          "CASL": "1",
+          "wght": "700",
+          "slnt": "-15",
+          "CRSV": "1"
+        },
+        "names": {
+          "1": "Recursive Mono Casual Bold Italic",
+          "2": "Regular",
+          "4": "Recursive Mono Casual Bold Italic",
+          "6": "RecursiveMonoCsl-BdItalic",
+          "16": "Recursive Mono Casual",
+          "17": "Bold Italic"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "name_record",
+            "id": 1,
+            "equals": "Recursive Mono Casual Bold Italic"
+          },
+          {
+            "kind": "name_record",
+            "id": 16,
+            "equals": "Recursive Mono Casual"
+          },
+          {
+            "kind": "name_record",
+            "id": 17,
+            "equals": "Bold Italic"
+          },
+          {
+            "kind": "name_absent",
+            "id": 346
+          },
+          {
+            "kind": "name_absent",
+            "id": 275
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.g10.stat-axis-values-outside-the-slice-lose-their-names",
+      "title": "STAT axis values dropped by the slice take their name records with them",
+      "covers": [
+        "G10",
+        "G5"
+      ],
+      "class": "fonttools",
+      "rationale": "STAT axis values whose coordinates fall outside the new limits are removed (G5), and their ValueNameID records then have no referrer left, so they go too. Verified with fontTools 4.62.1: pinning wght=400 leaves 406 'Regular' and removes 405 'Light', 411 'Black' and 412 'ExtraBlack'; pinning CASL=0 leaves 404 'Linear' and removes 403 'Mono' along with the Casual value. Keeping them would leave orphaned strings, and dropping the wrong ones would leave STAT pointing at a missing name.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "400",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_record",
+            "id": 406,
+            "equals": "Regular"
+          },
+          {
+            "kind": "name_absent",
+            "id": 405
+          },
+          {
+            "kind": "name_absent",
+            "id": 411
+          },
+          {
+            "kind": "name_absent",
+            "id": 412
+          },
+          {
+            "kind": "name_record",
+            "id": 404,
+            "equals": "Linear"
+          },
+          {
+            "kind": "name_absent",
+            "id": 403
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.g10.editing-does-not-resurrect-pruned-records",
+      "title": "Editing the name table does not bring back instance names the slice removed",
+      "covers": [
+        "G10",
+        "D3"
+      ],
+      "class": "fonttools",
+      "rationale": "The complement of the previous case: a tool that rebuilt the name table from the source font in order to apply the edits would restore the 128 instance-name records that pruning had just removed, inflating the output and re-orphaning every one of them. The edit must be applied to the sliced table in place. Verified against the pruned set for this location with fontTools 4.62.1.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "400",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "names": {
+          "1": "Recursive Sans Linear",
+          "2": "Regular"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "name_ids_subset_of",
+            "ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              269,
+              270,
+              271,
+              272,
+              273,
+              402,
+              404,
+              406,
+              413
+            ]
+          },
+          {
+            "kind": "name_record",
+            "id": 1,
+            "equals": "Recursive Sans Linear"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names.g10.deleting-a-name-does-not-break-a-surviving-reference",
+      "title": "After a partial slice every fvar and STAT name reference still resolves",
+      "covers": [
+        "G10",
+        "D4"
+      ],
+      "class": "spec",
+      "rationale": "Pruning protects against orphaned records; this checks the opposite fault, a live reference to a record that is gone. It is reachable in practice: fvar's subfamilyNameID may be 17 for a default instance, and clearing row 17 deletes name ID 17 without fvar knowing. The specification requires the subfamilyNameID to identify 'entries in the name table', so a surviving instance record pointing at a deleted ID makes the font malformed. The case slices partially, so fvar and STAT both survive, and clears the two WWS rows -- which are referenced by nothing -- to show that a legitimate deletion leaves every reference intact.",
+      "fixture": "named-instances",
+      "input": {
+        "axes": {
+          "wdth": "100"
+        },
+        "names": {
+          "21": "",
+          "22": ""
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "has_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "name_absent",
+            "id": 21
+          },
+          {
+            "kind": "name_absent",
+            "id": 22
+          },
+          {
+            "kind": "name_references_resolve"
+          },
+          {
+            "kind": "named_instances_within_extent"
+          }
+        ]
+      }
+    }
+  ]
+}

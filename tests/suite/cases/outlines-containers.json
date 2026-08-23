@@ -1,0 +1,2270 @@
+{
+  "area": "outlines-containers",
+  "cases": [
+    {
+      "id": "outlines.static-matches-source-at-default",
+      "title": "A static instance pinned at every axis default has the variable font's default outlines",
+      "covers": [
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "The default location is the one place where no interpolation happens at all: the glyf table already holds those coordinates and every gvar delta scales to zero, so the instance must reproduce them exactly. Any deviation here is not rounding, it is a bug in delta application or in the normalization of the requested location onto the axis. This is the cheapest possible check of G13 and the one whose failure localizes the fault fastest, which is why it is worth having separately from the interior-location cases.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "300",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "no_table",
+            "table": "gvar"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "MONO": 0,
+              "CASL": 0,
+              "wght": 300,
+              "slnt": 0,
+              "CRSV": 0.5
+            },
+            "tolerance": 0.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "outlines.static-matches-source-at-interior",
+      "title": "A static instance pinned inside the design space matches the source rendered there",
+      "covers": [
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "G13 is the whole point of instancing: the sliced font must draw what a variation-aware renderer draws for the source at the same location, or the slice has silently changed the design. The tolerance is half a unit because glyf coordinates are int16 (OpenType `glyf`, simple glyph description), so a renderer's floating-point interpolated position must be rounded exactly once to reach the static instance and can differ by no more than 0.5 units. Measured against fontTools 4.62.1 on this fixture the largest disagreement over all glyphs at wght=650 and other interior locations is 0.4998 units, so 0.5 is tight but achievable; anything above it is a real disagreement about the shape, not quantization.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "650",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "MONO": 0,
+              "CASL": 0,
+              "wght": 650,
+              "slnt": 0,
+              "CRSV": 0.5
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "outlines.static-matches-source-at-extremes",
+      "title": "A static instance pinned at the axis extremes matches the source rendered there",
+      "covers": [
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "At a corner of the design space every axis normalizes to exactly +/-1, so each region's scalar is 1 or 0 and the deltas are applied undivided; the arithmetic is exact and the result must be integer-identical to the source. Corners are also where a sign error or a swapped peak/intermediate tuple shows up most loudly, because that is where the deltas are largest. A tolerance of zero is therefore defensible here and is deliberately stricter than the interior case.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "1",
+          "CASL": "1",
+          "wght": "1000",
+          "slnt": "-15",
+          "CRSV": "1"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "MONO": 1,
+              "CASL": 1,
+              "wght": 1000,
+              "slnt": -15,
+              "CRSV": 1
+            },
+            "tolerance": 0.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "outlines.static-matches-source-at-fractional",
+      "title": "A pin at a fractional user coordinate matches the source rendered there",
+      "covers": [
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "A user coordinate that is not a round number exercises the full chain: `float()` parsing, normalization to F2Dot14, the `avar` segment map, region scalars, and one final rounding to int16. Locations like wght=653.7 are exactly where an implementation that normalizes with the wrong precision, or that rounds the normalized coordinate to F2Dot14 at the wrong moment, drifts away from the reference. Half a unit is still the right bound, for the same int16 reason as the interior case, and it holds empirically on this fixture at this location.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0.37",
+          "CASL": "0.5",
+          "wght": "653.7",
+          "slnt": "-7.5",
+          "CRSV": "0.25"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "all_coordinates_finite"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "MONO": 0.37,
+              "CASL": 0.5,
+              "wght": 653.7,
+              "slnt": -7.5,
+              "CRSV": 0.25
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "outlines.advances-match-source-at-interior",
+      "title": "Advance widths in a static instance match the source's advances at that location",
+      "covers": [
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "An outline that is right with an advance that is wrong still ruins the text: spacing is as much a part of the instance as the shape. Advances at a location come from `hmtx` plus the `HVAR` item variation store, and this fixture has an `HVAR`, so an implementation that applies gvar but forgets HVAR produces correct glyphs at the wrong widths. `hmtx.advanceWidth` is uint16 (OpenType `hmtx`), so half a unit of rounding is again the natural bound; on this fixture fontTools reproduces the reference advances exactly, so 0.5 is generous.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "650",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "HVAR"
+          },
+          {
+            "kind": "advances_match_source_at",
+            "location": {
+              "MONO": 0,
+              "CASL": 0,
+              "wght": 650,
+              "slnt": 0,
+              "CRSV": 0.5
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "outlines.advances-match-source-at-mono-extreme",
+      "title": "Advance widths match at the MONO=1 corner, where they change the most",
+      "covers": [
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "Recursive's `MONO` axis exists to change advance widths, so MONO=1 is the location where an HVAR mistake produces the largest visible error and the easiest one to diagnose. At a corner every region scalar is 0 or 1, so the reference advance is an exact integer and no rounding allowance is needed. Checking advances at both an interior point and a corner separates 'HVAR ignored entirely' from 'HVAR interpolated wrongly'.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "1",
+          "CASL": "0",
+          "wght": "300",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "advances_match_source_at",
+            "location": {
+              "MONO": 1,
+              "CASL": 0,
+              "wght": 300,
+              "slnt": 0,
+              "CRSV": 0.5
+            },
+            "tolerance": 0.0
+          },
+          {
+            "kind": "hhea_matches_hmtx"
+          }
+        ]
+      }
+    },
+    {
+      "id": "outlines.partial-instance-matches-across",
+      "title": "A partially instanced font still interpolates correctly across the surviving axis",
+      "covers": [
+        "G2",
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "When some axes are pinned and one is left, the output is still variable and G13 has to hold at every location in the reduced space, not just at its default. This is strictly harder than the static case: the gvar tuples for the pinned axes must be folded into the base outlines and into the surviving axis's deltas, and an implementation that gets the default right can still get the ends of the surviving axis wrong. Sampling the retained range at its minimum, middle and maximum catches exactly that failure. The tolerance is 0.5 for the same int16 reason, applied to the interpolated result at each sample.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "300:700",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "has_table",
+            "table": "gvar"
+          },
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "wght"
+            ]
+          },
+          {
+            "kind": "outlines_match_source_across",
+            "locations": [
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 300,
+                "slnt": 0,
+                "CRSV": 0.5
+              },
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 500,
+                "slnt": 0,
+                "CRSV": 0.5
+              },
+              {
+                "MONO": 0,
+                "CASL": 0,
+                "wght": 700,
+                "slnt": 0,
+                "CRSV": 0.5
+              }
+            ],
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "outlines.two-axis-static-matches",
+      "title": "A minimal two-axis font instances to the right outlines",
+      "covers": [
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "`recursive-vf` has an `avar`, feature variations and five axes, so a failure there has many possible causes; `two-axis` is the control, with simple contours, two axes and nothing else, so a failure can only be delta application. Having the same property tested on both a minimal and a realistic fixture is what makes a G13 failure diagnosable rather than merely visible. The fixture is specified to carry `wght` 100-900 default 400 and `wdth` 75-125 default 100, and this case pins an interior point on both.",
+      "fixture": "two-axis",
+      "input": {
+        "axes": {
+          "wght": "700",
+          "wdth": "87.5"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "wght": 700,
+              "wdth": 87.5
+            },
+            "tolerance": 0.5
+          },
+          {
+            "kind": "advances_match_source_at",
+            "location": {
+              "wght": 700,
+              "wdth": 87.5
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "outlines.two-axis-partial-matches-across",
+      "title": "Pinning one of two axes leaves the other interpolating correctly",
+      "covers": [
+        "G2",
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "Folding a pinned axis into a two-dimensional delta set is the smallest case in which intermediate-region tuples have to be re-tented onto a lower-dimensional space, and it is where an off-by-one in region indexing shows up without any avar or feature-variation noise. If the surviving axis interpolates correctly at its minimum, default and maximum after the fold, the reduction preserved the design; if it is right only at the default, the deltas were dropped rather than folded. The tolerance is 0.5, the int16 quantization bound.",
+      "fixture": "two-axis",
+      "input": {
+        "axes": {
+          "wdth": "100"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "wght"
+            ]
+          },
+          {
+            "kind": "outlines_match_source_across",
+            "locations": [
+              {
+                "wght": 100,
+                "wdth": 100
+              },
+              {
+                "wght": 400,
+                "wdth": 100
+              },
+              {
+                "wght": 900,
+                "wdth": 100
+              }
+            ],
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "outlines.composites-static-matches",
+      "title": "Composite glyphs instance to the right outlines, including a nested one",
+      "covers": [
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "A composite's shape depends on its components' outlines *and* on its own component offsets, both of which vary, so it is the one glyph kind where two independent delta paths must agree. Nesting two deep means a rounding error in the inner composite's offset is inherited by the outer one, so the error budget compounds: each level rounds its offset to int16 (OpenType `glyf`, composite glyph description, ARG_1_AND_2_ARE_WORDS), and a scaled component multiplies its base glyph's own rounding. That is why this case uses the check's default tolerance of 1.0 rather than the 0.5 used for simple contours: half a unit per level, two levels.",
+      "fixture": "composites",
+      "input": {
+        "axes": {
+          "wght": "700"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "no_table",
+            "table": "gvar"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "wght": 700
+            },
+            "tolerance": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "outlines.composites-advances-match",
+      "title": "Composite glyph advances are not disturbed by instancing",
+      "covers": [
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "A composite may take its advance from a component via the USE_MY_METRICS flag (OpenType `glyf`), so an implementation that rebuilds composites, reorders components, or decomposes them can move the advance without touching a single outline coordinate. Advances are exact integers in `hmtx`, and instancing has no reason to change them beyond applying HVAR, so the reference is exact to within the same half-unit rounding as any other advance. Checking this separately from the outline check is what distinguishes 'the shape moved' from 'the shape is right but sits in the wrong box'.",
+      "fixture": "composites",
+      "input": {
+        "axes": {
+          "wght": "700"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "advances_match_source_at",
+            "location": {
+              "wght": 700
+            },
+            "tolerance": 0.5
+          },
+          {
+            "kind": "hhea_matches_hmtx"
+          }
+        ]
+      }
+    },
+    {
+      "id": "outlines.hinted-static-matches",
+      "title": "Instancing a hinted font does not move its outlines",
+      "covers": [
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "Hinting is a program that runs at rasterization time and never alters the stored coordinates, so the presence of `prep`, `fpgm`, `cvt ` and glyph instructions must make no difference at all to the outlines an instance carries. An implementation that decompiles and recompiles glyphs in order to preserve or strip instructions is exactly the kind that perturbs coordinates in passing, and this case catches that. Tolerance is 0.5, unchanged from the unhinted case, because nothing about hinting justifies a larger error budget.",
+      "fixture": "hinted",
+      "input": {
+        "axes": {
+          "wght": "700"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "wght": 700
+            },
+            "tolerance": 0.5
+          },
+          {
+            "kind": "advances_match_source_at",
+            "location": {
+              "wght": 700
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "outlines.contour-structure-preserved",
+      "title": "Instancing does not change how many contours a glyph has",
+      "covers": [
+        "G13"
+      ],
+      "class": "spec",
+      "rationale": "Variation deltas move points; they cannot add, remove or merge contours, because gvar deltas are indexed by point number against a fixed point set (OpenType `gvar`, 'the number of deltas must match the number of points in the glyph'). So a static instance must have exactly the contour and point structure of the source glyph. `a` in this fixture has two contours, an outer and a counter, and an instance that reports any other number has rebuilt the glyph rather than interpolated it.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "650",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "contour_count",
+            "glyph": "a",
+            "equals": 2
+          },
+          {
+            "kind": "contour_count",
+            "glyph": "a.italic",
+            "equals": 2
+          },
+          {
+            "kind": "maxp_covers_outlines"
+          }
+        ]
+      }
+    },
+    {
+      "id": "container.read-woff",
+      "title": "A WOFF input is read and sliced like the sfnt it wraps",
+      "covers": [
+        "A3",
+        "H1"
+      ],
+      "class": "fonttools",
+      "rationale": "WOFF is defined as a lossless repackaging of an sfnt: the WOFF 1.0 specification states that the format 'is a simple repackaging of the table-based sfnt structure' and that decoding reproduces the original tables byte for byte. A tool that accepts `.woff` in its open dialog (`dialogs.py:44`) therefore has no excuse for behaving differently on it, and the outlines of a slice from the WOFF must be the same as from the TTF. This is the input half of A3; the output half is tested separately.",
+      "fixture": "recursive-vf-woff",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "650",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "glyph_count",
+            "equals": 3
+          },
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "MONO": 0,
+              "CASL": 0,
+              "wght": 650,
+              "slnt": 0,
+              "CRSV": 0.5
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "container.read-woff2",
+      "title": "A WOFF2 input is read and sliced like the sfnt it wraps",
+      "covers": [
+        "A3",
+        "H1"
+      ],
+      "class": "fonttools",
+      "rationale": "WOFF2 applies a reversible transform to `glyf` and `loca` before compressing, so unlike WOFF it does not simply hold the original bytes; the WOFF2 specification requires the transform to be exactly invertible and the reconstructed tables to be equivalent. That makes reading WOFF2 the strongest test that the input decoder is faithful, because a bug in the glyf reconstruction shows up directly as wrong outlines. If the outlines from the WOFF2 input match the source at the same location, the transform was reversed correctly.",
+      "fixture": "recursive-vf-woff2",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "650",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "glyph_count",
+            "equals": 3
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "MONO": 0,
+              "CASL": 0,
+              "wght": 650,
+              "slnt": 0,
+              "CRSV": 0.5
+            },
+            "tolerance": 0.5
+          },
+          {
+            "kind": "contour_count",
+            "glyph": "a",
+            "equals": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "container.read-otf",
+      "title": "An OTF (CFF-flavoured sfnt) input is accepted",
+      "covers": [
+        "A3"
+      ],
+      "class": "fonttools",
+      "rationale": "A3 claims all four of TrueType, CFF, WOFF and WOFF2 are readable because `TTFont` reads all four, and the open dialog offers `.otf`. Accepting `.otf` in the file filter and then failing on the file would be a broken promise made by the interface itself. `cff2-vf` is the roster's only CFF-flavoured sfnt, so it is the fixture that exercises the OTTO branch of the reader; this case asserts only that the font is read and produces a font, with the CFF-specific questions handled in the `cff.*` cases.",
+      "fixture": "cff2-vf",
+      "input": {
+        "axes": {
+          "wght": "700"
+        },
+        "format": "otf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "sfnt_flavor",
+            "equals": "cff"
+          }
+        ]
+      }
+    },
+    {
+      "id": "container.ttf-in-ttf-out",
+      "title": "A TrueType input saved with a .ttf name is a bare sfnt",
+      "covers": [
+        "A3",
+        "H1"
+      ],
+      "class": "fonttools",
+      "rationale": "This is the baseline every other container case is compared against, and the only combination on which the original and the corrected behaviour are certain to agree. `sfnt_flavor` must be `truetype`: an sfnt with sfntVersion 0x00010000 and a `glyf` table, no WOFF wrapper. It also fixes the reference output that the WOFF and WOFF2 round-trip cases assert equality against, so its id is load-bearing and must not be renamed.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "650",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "sfnt_flavor",
+            "equals": "truetype"
+          },
+          {
+            "kind": "has_table",
+            "table": "glyf"
+          },
+          {
+            "kind": "has_table",
+            "table": "loca"
+          },
+          {
+            "kind": "no_table",
+            "table": "DSIG"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "MONO": 0,
+              "CASL": 0,
+              "wght": 650,
+              "slnt": 0,
+              "CRSV": 0.5
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "container.ttf-in-otf-out",
+      "title": "Typing .otf for a TrueType font does not convert the outlines",
+      "covers": [
+        "H1"
+      ],
+      "class": "judgement",
+      "rationale": "`.ttf` and `.otf` name the same container — a bare sfnt — and differ only in convention about which outline format is inside. Converting quadratic `glyf` curves to CFF cubics is a lossy re-drawing of every glyph that the user did not ask for, and the OpenType specification treats the outline format as a property of the font, not of the filename. So the honest reading of H1 is that the extension selects the *container*, and `.ttf` versus `.otf` selects nothing: the output must still be a glyf-flavoured sfnt.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "650",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "otf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "sfnt_flavor",
+            "equals": "truetype"
+          },
+          {
+            "kind": "has_table",
+            "table": "glyf"
+          },
+          {
+            "kind": "no_table",
+            "table": "CFF "
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "MONO": 0,
+              "CASL": 0,
+              "wght": 650,
+              "slnt": 0,
+              "CRSV": 0.5
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "container.ttf-in-woff-out",
+      "title": "Typing .woff for a TrueType input must produce a WOFF",
+      "covers": [
+        "H1"
+      ],
+      "class": "slice-ui",
+      "rationale": "H1 states the output container follows the extension the user types, and a user who types `.woff` is asking for a web font. **The original fails this case.** `TTFont.save` does not look at the filename at all: it passes `self.flavor` to `SFNTWriter` (`ttFont.py:411`), and `self.flavor` was copied from the reader when the input was opened (`ttFont.py:318`), so a TTF input always writes a bare sfnt no matter what it is called. Verified with fontTools 4.62.1: slicing `Recursive-VF.subset.ttf` to `o.woff` yields a file whose flavor is `None`. Shipping an sfnt named `.woff` is a real defect, because a server sending it as `font/woff` produces a font a browser rejects.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "650",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "woff"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "sfnt_flavor",
+            "equals": "woff"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "MONO": 0,
+              "CASL": 0,
+              "wght": 650,
+              "slnt": 0,
+              "CRSV": 0.5
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "container.ttf-in-woff2-out",
+      "title": "Typing .woff2 for a TrueType input must produce a WOFF2",
+      "covers": [
+        "H1"
+      ],
+      "class": "slice-ui",
+      "rationale": "Same contract as the WOFF case and the same defect in the original: verified with fontTools 4.62.1, saving a TTF-read font to `o.woff2` produces a bare sfnt of exactly the size of the sfnt, with flavor `None`. **The original fails this case.** WOFF2 is where it matters most in practice, since it is the only container most sites actually deploy, and a mislabelled sfnt is unusable there. The check is `sfnt_flavor` = `woff2` together with an outline check, because a container that is right but whose glyf reconstruction is wrong is no better than the wrong container.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "650",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "woff2"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "sfnt_flavor",
+            "equals": "woff2"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "MONO": 0,
+              "CASL": 0,
+              "wght": 650,
+              "slnt": 0,
+              "CRSV": 0.5
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "container.woff-in-ttf-out",
+      "title": "A WOFF input saved with a .ttf name must produce a bare sfnt",
+      "covers": [
+        "A3",
+        "H1"
+      ],
+      "class": "slice-ui",
+      "rationale": "The mirror image of the previous two, and the direction in which the original's behaviour is most surprising. **The original fails this case:** because the flavor is inherited from the reader, a WOFF input always writes a WOFF, so a user who opens a `.woff` and saves as `.ttf` gets a WOFF file with a `.ttf` name — verified with fontTools 4.62.1, flavor `woff`, 1628 bytes. A desktop font manager asked to install that file will reject it. H1 says the extension decides, and the extension here says sfnt.",
+      "fixture": "recursive-vf-woff",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "650",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "sfnt_flavor",
+            "equals": "truetype"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "MONO": 0,
+              "CASL": 0,
+              "wght": 650,
+              "slnt": 0,
+              "CRSV": 0.5
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "container.woff2-in-ttf-out",
+      "title": "A WOFF2 input saved with a .ttf name must produce a bare sfnt",
+      "covers": [
+        "A3",
+        "H1"
+      ],
+      "class": "slice-ui",
+      "rationale": "**The original fails this case** for the same inherited-flavor reason: a WOFF2 input saved to `o.ttf` comes back with flavor `woff2`, verified with fontTools 4.62.1. Decoding WOFF2 and re-encoding it as WOFF2 also silently re-runs the glyf transform, so this case additionally confirms that a full decode-to-sfnt path exists and is exercised rather than the input bytes being passed through. The outline check is what proves the decode was faithful and not merely a repackaging.",
+      "fixture": "recursive-vf-woff2",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "650",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "sfnt_flavor",
+            "equals": "truetype"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "MONO": 0,
+              "CASL": 0,
+              "wght": 650,
+              "slnt": 0,
+              "CRSV": 0.5
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "container.woff-in-woff-out",
+      "title": "A WOFF input saved as .woff stays a WOFF",
+      "covers": [
+        "A3",
+        "H1"
+      ],
+      "class": "fonttools",
+      "rationale": "The one WOFF-output combination the original gets right, and it gets it right by accident: the flavor is inherited from the input rather than chosen from the extension, and here the two happen to agree. Including it makes the failure pattern of the four cross-container cases interpretable — a runner that fails all of `ttf-in-woff-out`, `woff-in-ttf-out` and their WOFF2 twins but passes this one is inheriting the flavor, not ignoring containers entirely. The outline check is carried through so that a WOFF-to-WOFF path is not exempt from G13.",
+      "fixture": "recursive-vf-woff",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "650",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "woff"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "sfnt_flavor",
+            "equals": "woff"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "MONO": 0,
+              "CASL": 0,
+              "wght": 650,
+              "slnt": 0,
+              "CRSV": 0.5
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "container.woff2-in-woff2-out",
+      "title": "A WOFF2 input saved as .woff2 stays a WOFF2",
+      "covers": [
+        "A3",
+        "H1"
+      ],
+      "class": "fonttools",
+      "rationale": "The WOFF2 twin of the previous case, and the one that puts the full WOFF2 decode/encode cycle under an outline check: the input transform is reversed on read and re-applied on write, so a bug in either direction moves coordinates. Because the WOFF2 glyf transform is specified as exactly invertible, there is no error budget on the container itself; the 0.5 tolerance here is entirely the instancing rounding allowance, not a container allowance. Any outline error above that is a codec bug, not quantization.",
+      "fixture": "recursive-vf-woff2",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "650",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "woff2"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "sfnt_flavor",
+            "equals": "woff2"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "MONO": 0,
+              "CASL": 0,
+              "wght": 650,
+              "slnt": 0,
+              "CRSV": 0.5
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "container.woff-output-roundtrips-to-ttf-output",
+      "title": "The same slice written as WOFF holds the same tables and outlines as written as TTF",
+      "covers": [
+        "H1"
+      ],
+      "class": "spec",
+      "rationale": "WOFF is specified as a lossless container: the WOFF 1.0 specification requires that decoding reproduce the sfnt table data exactly, and that the format add no capability beyond compression and metadata. So two runs of the identical job differing only in the typed extension must yield the same table inventory, the same glyph order and byte-identical outlines once the wrapper is removed. This is a much stronger invariant than checking each output against the source independently, because it admits no rounding slack at all: the two outputs come from the same instanced font.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "650",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "woff"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "sfnt_flavor",
+            "equals": "woff"
+          },
+          {
+            "kind": "matches_case_output",
+            "case": "container.ttf-in-ttf-out",
+            "compare": [
+              "tables",
+              "glyph_order",
+              "outlines",
+              "advances"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "container.woff2-output-roundtrips-to-ttf-output",
+      "title": "The same slice written as WOFF2 holds the same tables and outlines as written as TTF",
+      "covers": [
+        "H1"
+      ],
+      "class": "spec",
+      "rationale": "WOFF2 compresses harder and transforms `glyf`/`loca`, but the WOFF2 specification still requires the decoded font to be functionally identical to the input sfnt, with the transform exactly reversible. Equality against the TTF output is therefore the right expectation and admits no tolerance: if a coordinate differs by one unit, the transform is not being reversed correctly. This is the check that would catch a WOFF2 encoder that quietly drops a table it thinks is redundant, which byte-size or parse checks would not.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "650",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "woff2"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "sfnt_flavor",
+            "equals": "woff2"
+          },
+          {
+            "kind": "matches_case_output",
+            "case": "container.ttf-in-ttf-out",
+            "compare": [
+              "tables",
+              "glyph_order",
+              "outlines",
+              "advances"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "container.woff-input-roundtrips-to-ttf-input",
+      "title": "Slicing the WOFF fixture gives the same result as slicing the TTF fixture",
+      "covers": [
+        "A3",
+        "H1"
+      ],
+      "class": "spec",
+      "rationale": "`recursive-vf` and `recursive-vf-woff` are the same font in two containers, so the losslessness of WOFF means slicing either with the same settings must give the same font. This is the input-side counterpart of the output round-trip and it catches a different fault: a reader that loses a table WOFF happens to store differently, or that reorders the glyph set. Because both sides go through the identical instancing, the comparison is exact and needs no tolerance.",
+      "fixture": "recursive-vf-woff",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "650",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "matches_case_output",
+            "case": "container.ttf-in-ttf-out",
+            "compare": [
+              "tables",
+              "glyph_order",
+              "outlines",
+              "advances"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "container.woff2-input-roundtrips-to-ttf-input",
+      "title": "Slicing the WOFF2 fixture gives the same result as slicing the TTF fixture",
+      "covers": [
+        "A3",
+        "H1"
+      ],
+      "class": "spec",
+      "rationale": "The WOFF2 input path reconstructs `glyf` and `loca` from a transformed representation, so this is the case that proves the reconstruction is exact rather than merely plausible. Comparing against the TTF-input result rather than against the variable source removes the instancing rounding from the comparison entirely, leaving only the codec under test. A WOFF2 decoder that gets composite glyph flags or the overlap-simple bit wrong will show up here and nowhere else in the corpus.",
+      "fixture": "recursive-vf-woff2",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "650",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "matches_case_output",
+            "case": "container.ttf-in-ttf-out",
+            "compare": [
+              "tables",
+              "glyph_order",
+              "outlines",
+              "advances"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "container.woff2-preserves-glyph-names",
+      "title": "A WOFF2 round trip keeps the post table's glyph names",
+      "covers": [
+        "A3",
+        "H1"
+      ],
+      "class": "spec",
+      "rationale": "WOFF2 defines an optional transform for the `post` version 2.0 table's name storage, and a decoder that mishandles it silently renames glyphs to `glyph00001` style placeholders. Glyph names are not cosmetic: they are how `GSUB` rules, this corpus's own `contour_count` and `substitutes` checks, and any downstream tooling identify glyphs. This fixture's `post` is format 2.0 with the names `.notdef`, `a` and `a.italic`, so the names surviving is directly observable.",
+      "fixture": "recursive-vf-woff2",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "650",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "woff2"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "has_table",
+            "table": "post"
+          },
+          {
+            "kind": "glyph_count",
+            "equals": 3
+          },
+          {
+            "kind": "matches_case_output",
+            "case": "container.ttf-in-ttf-out",
+            "compare": [
+              "glyph_order"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "container.woff-preserves-hinting",
+      "title": "Wrapping a hinted font in WOFF does not drop its hinting tables",
+      "covers": [
+        "H1"
+      ],
+      "class": "spec",
+      "rationale": "WOFF stores whatever tables the sfnt had, with no table-specific knowledge, so `prep`, `fpgm` and `cvt ` must survive the wrapper untouched. The reason to test it explicitly is that hinting tables are the ones an over-eager 'web optimization' step is most tempted to strip, and stripping them changes rendering on every Windows machine using the ClearType v1 path. Slicing is not subsetting, and nothing about choosing a web container authorizes discarding a font's rasterization program.",
+      "fixture": "hinted",
+      "input": {
+        "axes": {
+          "wght": "700"
+        },
+        "format": "woff"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "sfnt_flavor",
+            "equals": "woff"
+          },
+          {
+            "kind": "has_table",
+            "table": "prep"
+          },
+          {
+            "kind": "has_table",
+            "table": "fpgm"
+          },
+          {
+            "kind": "has_table",
+            "table": "cvt "
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "wght": 700
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "container.zopfli-is-not-a-correctness-property",
+      "title": "WOFF compression strength is deliberately not tested",
+      "covers": [
+        "H2"
+      ],
+      "class": "judgement",
+      "rationale": "H2 records that the original sets `sfnt.USE_ZOPFLI = True` before saving (`instanceworker.py:69`), but zopfli emits an ordinary DEFLATE stream: the WOFF 1.0 specification requires only that each table be compressed with zlib, and a decoder cannot tell which encoder produced the bytes. The only observable difference is file size, and asserting a size would fail any implementation that used a different but equally valid deflate library, which is a test of the toolchain rather than of the font. This case therefore covers H2 by asserting what actually matters — that the WOFF decodes to the right font — and records that no size or encoder assertion belongs in this corpus.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "650",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "format": "woff"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "sfnt_flavor",
+            "equals": "woff"
+          },
+          {
+            "kind": "matches_case_output",
+            "case": "container.ttf-in-ttf-out",
+            "compare": [
+              "tables",
+              "outlines"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "container.composites-survive-woff2",
+      "title": "Composite glyphs survive the WOFF2 glyf transform intact",
+      "covers": [
+        "A3",
+        "H1"
+      ],
+      "class": "spec",
+      "rationale": "The WOFF2 glyf transform encodes composite glyph data in its own stream, separate from the simple-glyph point streams, so composites are the part of the transform most likely to be reconstructed wrongly. A decoder that loses a component's scale or its ARGS_ARE_XY_VALUES flag produces a glyph that still parses and still has the right component count but draws in the wrong place, which only an outline comparison catches. The fixture's two-deep nesting means an error in the inner composite propagates and is visible in the outer one too.",
+      "fixture": "composites",
+      "input": {
+        "axes": {
+          "wght": "700"
+        },
+        "format": "woff2"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "sfnt_flavor",
+            "equals": "woff2"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "wght": 700
+            },
+            "tolerance": 1.0
+          },
+          {
+            "kind": "advances_match_source_at",
+            "location": {
+              "wght": 700
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "overlap.fixture-actually-overlaps",
+      "title": "Without overlap removal the overlapping fixture really does self-intersect",
+      "covers": [
+        "G12",
+        "G14"
+      ],
+      "class": "fonttools",
+      "rationale": "Every case in this section asserts that overlaps are gone, and all of them would pass vacuously against a fixture that never had any. This case is the control: with `remove_overlaps` off, `no_self_intersections` must *fail*, which is asserted here with `not`. It also records the pre-removal state that the untouched-glyph and advance-preservation cases compare against, so its id is load-bearing.",
+      "fixture": "overlapping",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "remove_overlaps": false,
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "no_self_intersections",
+            "not": true
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "wght": 400
+            },
+            "tolerance": 0.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "overlap.two-bars-merge-into-one-contour",
+      "title": "Two crossing bars become a single contour with the same filled region",
+      "covers": [
+        "G14"
+      ],
+      "original_lacks_feature": true,
+      "class": "judgement",
+      "rationale": "Two crossing rectangles under the non-zero winding rule fill a plus sign; removing the overlap must produce the outline of that plus sign, which is one contour of twelve points, not two rectangles. This is the simplest possible statement of what overlap removal means, and the contour count is the observable that distinguishes 'merged' from 'left alone but flagged'. The filled region must be identical because the rendered result was already the plus sign — overlap removal changes the description, never the picture. **The original never removes overlaps** (G14): it passes no `overlap` argument to `instantiateVariableFont`, so it is expected to fail this case.",
+      "fixture": "overlapping",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "remove_overlaps": true,
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "contour_count",
+            "glyph": "bars",
+            "equals": 1
+          },
+          {
+            "kind": "no_self_intersections"
+          },
+          {
+            "kind": "filled_region_matches",
+            "reference": {
+              "source_at": {
+                "wght": 400
+              }
+            },
+            "tolerance_units": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "overlap.counter-survives",
+      "title": "The counter of an 'o' is still a hole after overlap removal",
+      "covers": [
+        "G14"
+      ],
+      "original_lacks_feature": true,
+      "class": "spec",
+      "rationale": "TrueType fills with the non-zero winding rule (OpenType `glyf`), under which a counter is a contour wound opposite to the outer contour and therefore subtracts. A boolean-union implementation that treats every contour as an additive region fills counters in and destroys 'o', 'e', 'a', 'B' and 'p' throughout the font — a failure that is invisible to any outline-coordinate comparison but obvious to `filled_region_matches`. Two contours must remain and the hole must remain a hole. **The original never removes overlaps** (G14) and is expected to fail.",
+      "fixture": "overlapping",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "remove_overlaps": true,
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "contour_count",
+            "glyph": "o",
+            "equals": 2
+          },
+          {
+            "kind": "filled_region_matches",
+            "reference": {
+              "source_at": {
+                "wght": 400
+              }
+            },
+            "tolerance_units": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "overlap.counter-inside-a-counter-survives",
+      "title": "A circled letter keeps all four levels of its nesting",
+      "covers": [
+        "G14"
+      ],
+      "original_lacks_feature": true,
+      "class": "spec",
+      "rationale": "A circled 'o' nests fill inside hole inside fill inside hole: ring outer, ring counter, letter outer, letter counter. This is the case that rules out the naive algorithm of unioning the outward-wound contours and subtracting the inward-wound ones, which is correct only to depth two and turns the letter inside the ring into a hole at depth three. The non-zero winding rule counts crossings rather than alternating, so the right implementation is winding-aware at arbitrary depth. **The original never removes overlaps** (G14) and is expected to fail; a naive new implementation is expected to fail here while passing the plain-counter case, which is exactly why both exist.",
+      "fixture": "overlapping",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "remove_overlaps": true,
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "contour_count",
+            "glyph": "circled",
+            "equals": 4
+          },
+          {
+            "kind": "no_self_intersections"
+          },
+          {
+            "kind": "filled_region_matches",
+            "reference": {
+              "source_at": {
+                "wght": 400
+              }
+            },
+            "tolerance_units": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "overlap.self-intersecting-contour-resolved",
+      "title": "A contour that crosses itself is resolved without changing the filled region",
+      "covers": [
+        "G14"
+      ],
+      "original_lacks_feature": true,
+      "class": "judgement",
+      "rationale": "A single contour that crosses itself — a figure-eight or a bowtie — has no 'other contour' to union with, so an implementation built only around pairwise contour booleans has nothing to do and leaves it alone. Under non-zero winding a bowtie fills both lobes and a figure-eight cancels its inner region, so the correct result depends on the crossing's orientation and cannot be guessed. Requiring `no_self_intersections` on the output while requiring the filled region to be unchanged pins down both halves of the answer. **The original never removes overlaps** (G14) and is expected to fail.",
+      "fixture": "overlapping",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "remove_overlaps": true,
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_self_intersections"
+          },
+          {
+            "kind": "filled_region_matches",
+            "reference": {
+              "source_at": {
+                "wght": 400
+              }
+            },
+            "tolerance_units": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "overlap.filled-region-preserved-font-wide",
+      "title": "Overlap removal changes no glyph's filled region anywhere in the font",
+      "covers": [
+        "G14"
+      ],
+      "original_lacks_feature": true,
+      "class": "judgement",
+      "rationale": "This is the defining property of the feature and the reason `filled_region_matches` exists: the outline is *supposed* to change, so comparing coordinates would reject every correct implementation, while comparing the set of points inside the glyph accepts exactly the correct ones. The tolerance is one unit because the merged boundary passes through intersection points computed in floating point and then rounded to the integer grid, so the boundary can move by up to half a unit at a vertex and slightly more where a curve is refitted through rounded points. Anything beyond a unit is a change of shape, not of representation. **The original never removes overlaps** (G14) and is expected to fail.",
+      "fixture": "overlapping",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "remove_overlaps": true,
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "filled_region_matches",
+            "reference": {
+              "source_at": {
+                "wght": 400
+              }
+            },
+            "tolerance_units": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "overlap.no-self-intersections-font-wide",
+      "title": "No glyph in the output has a contour crossing itself or another",
+      "covers": [
+        "G14"
+      ],
+      "original_lacks_feature": true,
+      "class": "judgement",
+      "rationale": "The point of the feature is to produce outlines usable by consumers that cannot handle overlaps — PostScript printers, the CFF outline format, and pre-composition renderers that stroke rather than fill. A per-glyph pass that resolves the glyphs the test happens to name but leaves others intersecting delivers none of that, so the property has to be asserted over the whole font. Paired with the control case, which asserts the same font *does* self-intersect before removal, this is a real before/after and not a tautology. **The original never removes overlaps** (G14) and is expected to fail.",
+      "fixture": "overlapping",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "remove_overlaps": true,
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_self_intersections"
+          },
+          {
+            "kind": "all_coordinates_finite"
+          },
+          {
+            "kind": "maxp_covers_outlines"
+          }
+        ]
+      }
+    },
+    {
+      "id": "overlap.clean-glyph-is-left-alone",
+      "title": "A glyph with no overlaps is not rebuilt",
+      "covers": [
+        "G14"
+      ],
+      "original_lacks_feature": true,
+      "class": "judgement",
+      "rationale": "Passing a clean glyph through a boolean engine costs something and gains nothing: the engine renumbers points, may re-fit curves through rounded intersection points that were never needed, and can convert an exact quadratic into an approximation. fontTools takes exactly this position — `removeTTGlyphOverlaps` compares the simplified path with the original and only replaces the glyph `if not _same_path(path, path2)` (`ttLib/removeOverlaps.py`). So an untouched glyph must be byte-identical to what the same job produces with the feature off, which is what the comparison against the control case asserts. **The original never removes overlaps** (G14) and is expected to fail.",
+      "fixture": "overlapping",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "remove_overlaps": true,
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "contour_count",
+            "glyph": "clean",
+            "equals": 1
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "wght": 400
+            },
+            "tolerance": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "overlap.advances-are-not-changed",
+      "title": "Overlap removal does not change any advance width",
+      "covers": [
+        "G14"
+      ],
+      "original_lacks_feature": true,
+      "class": "fonttools",
+      "rationale": "Overlap removal is an operation on outlines; advance width is metrics, and nothing about merging two contours tells you anything about how much room the glyph should occupy. fontTools is explicit about the boundary: after replacing a glyph it rewrites only the left side bearing to match the new `xMin`, leaving the width alone — `hmtxTable[glyphName] = (width, glyph.xMin)` (`ttLib/removeOverlaps.py`). An implementation that recomputes advances from the merged bounding box would reflow every line of text set in the font. **The original never removes overlaps** (G14) and is expected to fail.",
+      "fixture": "overlapping",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "remove_overlaps": true,
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "advances_match_source_at",
+            "location": {
+              "wght": 400
+            },
+            "tolerance": 0.0
+          },
+          {
+            "kind": "matches_case_output",
+            "case": "overlap.fixture-actually-overlaps",
+            "compare": [
+              "advances",
+              "glyph_order"
+            ]
+          },
+          {
+            "kind": "hhea_matches_hmtx"
+          }
+        ]
+      }
+    },
+    {
+      "id": "overlap.metrics-tables-recalculated",
+      "title": "head and maxp describe the merged outlines, not the originals",
+      "covers": [
+        "G8",
+        "G14"
+      ],
+      "original_lacks_feature": true,
+      "class": "spec",
+      "rationale": "Merging contours changes point counts and can change the bounding box, and both are recorded in tables that renderers trust without re-deriving: `head.xMin`/`yMin`/`xMax`/`yMax` and `maxp.maxPoints`/`maxContours` (OpenType `head`, `maxp`). A rasterizer that allocates a point buffer from `maxp.maxPoints` will overflow or truncate if the value is stale. So the recalculation G8 already requires on save has to happen *after* removal, not before it. **The original never removes overlaps** (G14) and is expected to fail this case.",
+      "fixture": "overlapping",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "remove_overlaps": true,
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "head_bbox_matches_outlines"
+          },
+          {
+            "kind": "maxp_covers_outlines"
+          }
+        ]
+      }
+    },
+    {
+      "id": "overlap.requires-a-static-font",
+      "title": "Overlap removal on a still-variable output must be refused, not ignored",
+      "covers": [
+        "G14",
+        "G2"
+      ],
+      "original_lacks_feature": true,
+      "class": "judgement",
+      "rationale": "`gvar` deltas are addressed by point number against a fixed point set (OpenType `gvar`: the delta count must match the glyph's point count), and merging contours renumbers and re-counts the points, so every delta in the font would then refer to a different point. There is no way to remove overlaps from a font that is still variable and keep it correct; fontTools agrees and simply skips the work, guarding it with `if 'fvar' not in varfont` and documenting that 'the overlap parameter only has effect when generating full static instances' (`varLib/instancer/__init__.py`). Silently doing nothing when the user ticked the box is the same defect shape as B8, whose adjudicated verdict in this project is that an unsupported request must be refused rather than quietly reinterpreted, so the correct behaviour is a clear error. **The original has no such option at all** (G14) and fails this case for a different reason.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "300:700",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "remove_overlaps": true,
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "error",
+        "message_contains": [
+          "overlap",
+          "static"
+        ]
+      }
+    },
+    {
+      "id": "overlap.hinting-is-dropped",
+      "title": "Removing overlaps drops the font's hinting",
+      "covers": [
+        "G14"
+      ],
+      "original_lacks_feature": true,
+      "class": "judgement",
+      "rationale": "TrueType instructions address points by index (`SRP0`, `MDAP`, `IUP` and the rest all take point numbers), and the CVT program's assumptions about which point is which stop holding the moment contours are merged and points renumbered. Running a stale program against a new point set does not degrade gracefully; it moves the wrong points and distorts the glyph at small sizes. fontTools takes the same view and drops hinting from the whole font by default, noting that 'removing overlaps invalidates the hinting' and that leaving only some glyphs hinted 'would look weird' (`ttLib/removeOverlaps.py`). **The original never removes overlaps** (G14) and is expected to fail.",
+      "fixture": "hinted",
+      "input": {
+        "axes": {
+          "wght": "700"
+        },
+        "remove_overlaps": true,
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "prep"
+          },
+          {
+            "kind": "no_table",
+            "table": "fpgm"
+          },
+          {
+            "kind": "no_table",
+            "table": "cvt "
+          },
+          {
+            "kind": "maxp_field",
+            "field": "maxSizeOfInstructions",
+            "equals": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "overlap.hinting-kept-when-not-removing",
+      "title": "Instancing alone does not drop hinting",
+      "covers": [
+        "G13",
+        "G14"
+      ],
+      "class": "fonttools",
+      "rationale": "The previous case's justification for dropping hinting is specific to renumbered points, so it must not leak into the ordinary path: instancing moves points but does not add, remove or reorder them, so instructions remain valid and must be kept. Without this case an implementation could 'pass' the hinting-dropped case by never shipping hinting at all, which would silently degrade every font the tool touches. Together the two cases say precisely when hinting may be discarded and when it may not.",
+      "fixture": "hinted",
+      "input": {
+        "axes": {
+          "wght": "700"
+        },
+        "remove_overlaps": false,
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "has_table",
+            "table": "prep"
+          },
+          {
+            "kind": "has_table",
+            "table": "fpgm"
+          },
+          {
+            "kind": "has_table",
+            "table": "cvt "
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "wght": 700
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "overlap.overlapping-components-are-merged",
+      "title": "A composite whose components overlap is decomposed and merged",
+      "covers": [
+        "G14"
+      ],
+      "original_lacks_feature": true,
+      "class": "judgement",
+      "rationale": "A composite's overlap lives between its components, not inside any one of them, so it cannot be resolved without flattening the glyph into contours first; fontTools decomposes exactly and only in that case, testing `componentsOverlap` before replacing the glyph (`ttLib/removeOverlaps.py`). The result must be a simple glyph, because a composite by definition re-instantiates its base glyphs and cannot express the merged boundary. The filled region is again the invariant: decomposition plus merge changes the description completely while the picture stays put. **The original never removes overlaps** (G14) and is expected to fail.",
+      "fixture": "composites",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "remove_overlaps": true,
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "glyph_component_count",
+            "glyph": "comp.overlap",
+            "equals": 0
+          },
+          {
+            "kind": "no_self_intersections"
+          },
+          {
+            "kind": "filled_region_matches",
+            "reference": {
+              "source_at": {
+                "wght": 400
+              }
+            },
+            "tolerance_units": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "overlap.non-overlapping-composite-is-not-decomposed",
+      "title": "A composite whose components do not overlap keeps its components",
+      "covers": [
+        "G14"
+      ],
+      "original_lacks_feature": true,
+      "class": "judgement",
+      "rationale": "Composites exist to share outline data; decomposing them for no reason multiplies a font's `glyf` size by the number of times each base glyph is reused, which for an accented Latin font is substantial. Since there is no overlap to resolve, decomposing buys nothing and costs both size and the USE_MY_METRICS relationship between the composite and its base. fontTools decomposes only when `componentsOverlap` returns true, and that restraint is the correct behaviour, not an implementation detail. **The original never removes overlaps** (G14) and is expected to fail.",
+      "fixture": "composites",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "remove_overlaps": true,
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "glyph_component_count",
+            "glyph": "comp.plain",
+            "equals": 2
+          },
+          {
+            "kind": "filled_region_matches",
+            "reference": {
+              "source_at": {
+                "wght": 400
+              }
+            },
+            "tolerance_units": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "overlap.no-overlap-flags-after-removal",
+      "title": "A font with overlaps removed does not claim to have overlaps",
+      "covers": [
+        "G12",
+        "G14"
+      ],
+      "original_lacks_feature": true,
+      "class": "spec",
+      "rationale": "`OVERLAP_SIMPLE` and `OVERLAP_COMPOUND` tell a rasterizer 'this glyph self-overlaps, composite it before filling' (OpenType `glyf`, simple glyph flags), which on some rasterizers is a slower path and on others changes anti-aliasing at the seams. Setting them on a font whose overlaps have just been removed is a false statement about the outlines and gives up the performance the removal was for. fontTools treats the two as mutually exclusive branches of the same `if`, setting flags only under `KEEP_AND_SET_FLAGS` and never under `REMOVE` (`varLib/instancer/__init__.py`). **The original never removes overlaps** (G14): it always takes the flag-setting branch (G12) and is expected to fail.",
+      "fixture": "overlapping",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "remove_overlaps": true,
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "overlap_flags_present",
+            "equals": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "overlap.output-in-woff2-is-still-clean",
+      "title": "Overlap removal and a WOFF2 container compose without interfering",
+      "covers": [
+        "G14",
+        "H1"
+      ],
+      "original_lacks_feature": true,
+      "class": "judgement",
+      "rationale": "The WOFF2 glyf transform re-encodes point flags and coordinates, and removal has just rewritten every merged glyph's point set, so this pairing is where an ordering bug — transforming before merging, or recomputing `loca` from stale data — would surface. There is no reason the two features should interact, and asserting that they do not is cheaper than debugging it later. The filled region and the absence of self-intersections must both survive the round trip through the container. **The original never removes overlaps** (G14) and is expected to fail.",
+      "fixture": "overlapping",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "remove_overlaps": true,
+        "format": "woff2"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "sfnt_flavor",
+            "equals": "woff2"
+          },
+          {
+            "kind": "no_self_intersections"
+          },
+          {
+            "kind": "filled_region_matches",
+            "reference": {
+              "source_at": {
+                "wght": 400
+              }
+            },
+            "tolerance_units": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "overlap.removal-does-not-change-glyph-count",
+      "title": "Overlap removal neither adds nor removes glyphs",
+      "covers": [
+        "G14"
+      ],
+      "original_lacks_feature": true,
+      "class": "spec",
+      "rationale": "Glyph IDs are the currency of `cmap`, `GSUB`, `GPOS` and `hmtx`; inserting or dropping a glyph renumbers all of them and breaks every reference in the font. Decomposing a composite is a change to one glyph's description, not to the glyph inventory, so the count must be unchanged even where composites are flattened. This is the invariant that catches an implementation that, say, appends merged results as new glyphs rather than replacing them in place. **The original never removes overlaps** (G14) and is expected to fail.",
+      "fixture": "overlapping",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "remove_overlaps": true,
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "matches_case_output",
+            "case": "overlap.fixture-actually-overlaps",
+            "compare": [
+              "glyph_order",
+              "tables"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "cff.static-instance-is-valid",
+      "title": "A CFF2 variable font pinned on every axis yields a valid static CFF font",
+      "covers": [
+        "A3",
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "A tool asked to do something it cannot must refuse clearly rather than write a mangled font — the adjudicated verdict on B8 in this project — and for CFF2 the mangled outcome is concrete: charstrings still carrying `blend` operators in a font whose variation store has been removed, which the OpenType CFF2 specification makes meaningless because `blend` is defined only against an ItemVariationStore. But refusal is not required here, because fontTools 4.62.1 does implement CFF2 instancing: `instantiateCFF2` (`varLib/instancer/__init__.py:649`) is dispatched whenever `\"CFF2\" in varfont` (:1747), so the original, which delegates wholesale to `instantiateVariableFont`, is expected to succeed. By the corpus rule that a case the original passes this implementation must also pass, the expectation is success with correct outlines; an implementation that genuinely cannot do this must emit an error naming CFF2, never a font.",
+      "fixture": "cff2-vf",
+      "input": {
+        "axes": {
+          "wght": "700"
+        },
+        "format": "otf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "sfnt_flavor",
+            "equals": "cff"
+          },
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "no_table",
+            "table": "glyf"
+          },
+          {
+            "kind": "all_coordinates_finite"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "wght": 700
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "cff.advances-match-source",
+      "title": "A CFF2 instance has the advances the source has at that location",
+      "covers": [
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "CFF2 has no `gvar`-style per-glyph metrics, so advances come from `hmtx` plus `HVAR`, and fontTools notes in the instancer that HVAR handling for CFF2 is incomplete (`# TODO(anthrotype) Add support for HVAR/VVAR in CFF2`, `varLib/instancer/__init__.py:1103`), with the metrics updated by a separate path (:1124). That makes this the CFF branch's most likely silent failure: correct outlines at wrong widths. Advances are integers in `hmtx`, so half a unit is the whole rounding budget.",
+      "fixture": "cff2-vf",
+      "input": {
+        "axes": {
+          "wght": "700"
+        },
+        "format": "otf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "advances_match_source_at",
+            "location": {
+              "wght": 700
+            },
+            "tolerance": 0.5
+          },
+          {
+            "kind": "hhea_matches_hmtx"
+          }
+        ]
+      }
+    },
+    {
+      "id": "cff.extension-does-not-convert-outlines",
+      "title": "Typing .ttf for a CFF font does not invent TrueType outlines",
+      "covers": [
+        "H1",
+        "A3"
+      ],
+      "class": "judgement",
+      "rationale": "Converting cubic CFF charstrings to quadratic `glyf` contours is a lossy re-drawing with its own error tolerance, and it is not what H1 describes: the extension selects the container, and `.ttf` and `.otf` are the same container. Silently producing approximated outlines because of a filename would be exactly the 'silent mangling' the corpus rejects — the user asked for a container, not a redraw. The output must remain a CFF-flavoured sfnt with no `glyf` table, and if an implementation believes the filename must be honoured, the only acceptable alternative is refusing the job, not converting.",
+      "fixture": "cff2-vf",
+      "input": {
+        "axes": {
+          "wght": "700"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "sfnt_flavor",
+            "equals": "cff"
+          },
+          {
+            "kind": "no_table",
+            "table": "glyf"
+          },
+          {
+            "kind": "no_table",
+            "table": "loca"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "wght": 700
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "cff.partial-instance-stays-variable",
+      "title": "Restricting an axis on a CFF2 font leaves a variable CFF2 font",
+      "covers": [
+        "G2",
+        "G13",
+        "A3"
+      ],
+      "class": "fonttools",
+      "rationale": "CFF2 carries its variation data in the charstrings' `blend` operators and the table's own ItemVariationStore, so narrowing an axis means rewriting blends and re-tenting the store rather than deleting a `gvar`. An implementation that handles the fully-pinned case by throwing the variation data away will produce a font that is either static when the user asked for variable, or variable with a store that no longer matches its blends. Requiring `fvar` and `CFF2` to both survive, and the outlines to be right at three sampled weights, is what distinguishes real partial instancing from deletion. The fixture is specified with a `wght` axis 100-900 default 400, so 400:700 contains the default as B7 requires.",
+      "fixture": "cff2-vf",
+      "input": {
+        "axes": {
+          "wght": "400:700"
+        },
+        "format": "otf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "has_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "has_table",
+            "table": "CFF2"
+          },
+          {
+            "kind": "axis_extent",
+            "tag": "wght",
+            "min": 400,
+            "default": 400,
+            "max": 700
+          },
+          {
+            "kind": "outlines_match_source_across",
+            "locations": [
+              {
+                "wght": 400
+              },
+              {
+                "wght": 550
+              },
+              {
+                "wght": 700
+              }
+            ],
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "cff.woff-container-wraps-cff-sfnt",
+      "title": "A CFF font can be written into a WOFF container",
+      "covers": [
+        "H1",
+        "A3"
+      ],
+      "class": "spec",
+      "rationale": "WOFF wraps any sfnt, whatever outline format it holds; the WOFF 1.0 specification is explicit that the format is outline-agnostic and preserves the sfntVersion of the wrapped font. So the choice of container and the choice of outline format are independent, and this case is the one that proves an implementation has not conflated 'WOFF' with 'compressed TrueType'. The outlines must survive the wrapper exactly, since WOFF adds nothing but compression.",
+      "fixture": "cff2-vf",
+      "input": {
+        "axes": {
+          "wght": "700"
+        },
+        "format": "woff"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          },
+          {
+            "kind": "sfnt_flavor",
+            "equals": "woff"
+          },
+          {
+            "kind": "no_table",
+            "table": "glyf"
+          },
+          {
+            "kind": "outlines_match_source_at",
+            "location": {
+              "wght": 700
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "cff.remove-overlaps-preserves-filled-region",
+      "title": "Overlap removal on a CFF font preserves the filled region",
+      "covers": [
+        "G14"
+      ],
+      "original_lacks_feature": true,
+      "class": "spec",
+      "rationale": "CFF is the format where overlap removal is not merely an optimization: the Type 2 charstring specification says that overlapping subpaths are not permitted and that outlines must be non-overlapping for correct rendering, and PostScript interpreters fill CFF outlines with the non-zero rule but were never designed for self-intersection. fontTools reflects this by removing overlaps as part of any CFF2-to-CFF downgrade, 'as CFF does not support overlaps but CFF2 does' (`varLib/instancer/__init__.py`). The invariant is the same as for glyf — the filled region must not move — but the tolerance is tighter at half a unit, because CFF charstrings store fractional coordinates and the merged path is not forced onto the integer grid (fontTools uses `noRound` for the CFF path in `ttLib/removeOverlaps.py`). **The original never removes overlaps** (G14) and is expected to fail.",
+      "fixture": "cff2-vf",
+      "input": {
+        "axes": {
+          "wght": "700"
+        },
+        "remove_overlaps": true,
+        "format": "otf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_self_intersections"
+          },
+          {
+            "kind": "filled_region_matches",
+            "reference": {
+              "source_at": {
+                "wght": 700
+              }
+            },
+            "tolerance_units": 0.5
+          },
+          {
+            "kind": "advances_match_source_at",
+            "location": {
+              "wght": 700
+            },
+            "tolerance": 0.5
+          }
+        ]
+      }
+    }
+  ],
+  "_proposed_checks": [
+    {
+      "name": "matches_case_output",
+      "fields": {
+        "case": "the id of another case in the corpus, run with the same runner",
+        "compare": "list drawn from tables | glyph_order | outlines | advances | instructions"
+      },
+      "justification": "Several properties in this area are equalities between two outputs rather than between an output and the source. WOFF and WOFF2 are lossless containers around an sfnt, so the same slice written to each must yield the same tables and byte-identical outlines; comparing each independently against the variable source cannot express that, because each comparison carries an independent half-unit rounding allowance and would accept two outputs that differ by a unit from one another. The same shape is needed to say 'overlap removal changed no advance' and 'a clean glyph was not rebuilt', where the correct reference is the identical job with the feature off. Requires the runner to keep outputs addressable by case id within a run."
+    },
+    {
+      "name": "glyph_component_count",
+      "fields": {
+        "glyph": "glyph name",
+        "equals": "integer, the number of components the glyph has; 0 means a simple glyph"
+      },
+      "justification": "Overlap removal must decompose a composite whose components overlap, because the merged boundary cannot be expressed as a set of component references, and must leave a composite whose components do not overlap alone, because decomposing it multiplies the font's glyf size for nothing. No listed check can tell a simple glyph from a composite: `contour_count` resolves components and reports the same number either way. The check reads `glyf` composite glyph records directly and is meaningless for CFF, where it should report 0."
+    },
+    {
+      "name": "overlap_flags_present",
+      "fields": {
+        "equals": "boolean; true when every simple glyph with contours has OVERLAP_SIMPLE on its first point and every composite has OVERLAP_COMPOUND on its first component, false when no glyph has either"
+      },
+      "justification": "G12 and G14 are the two branches of the same decision in fontTools, and neither is observable through any listed check. A font whose overlaps have been removed must not carry OVERLAP_SIMPLE, because the flag is a false statement about the outlines and pushes rasterizers onto a slower compositing path; a font at the default overlap mode must carry it. The boolean form covers both directions and keeps the check to one entry rather than one per glyph."
+    }
+  ]
+}

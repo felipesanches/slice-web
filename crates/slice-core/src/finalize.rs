@@ -114,6 +114,26 @@ pub fn variation_name_ids(font: &FontRef) -> BTreeSet<u16> {
     used
 }
 
+/// Convert a font's `post` table for writing, repairing a legal shape write-fonts trips on.
+///
+/// A version 2.0 `post` carries a string pool for glyph names that are not in the
+/// standard Macintosh set. A font all of whose glyphs *are* in that set has a
+/// zero-length pool, which is perfectly legal and common. read-fonts reports an
+/// empty range as `None`, and write-fonts then panics writing the table back out,
+/// because for version 2.0 it requires the field to be present.
+///
+/// Found by the conformance corpus: every fixture with no extra glyph names crashed
+/// this, and every fixture with at least one did not.
+pub fn owned_post(font: &FontRef) -> Option<write_fonts::tables::post::Post> {
+    let mut post: write_fonts::tables::post::Post = font.post().ok()?.to_owned_table();
+    // `num_glyphs` being present is what marks this as a 2.0-shaped table; an absent
+    // string pool alongside it means "no names beyond the standard set", not "missing".
+    if post.num_glyphs.is_some() && post.string_data.is_none() {
+        post.string_data = Some(Vec::new());
+    }
+    Some(post)
+}
+
 /// Recalculate everything that depends on the final outlines, and drop what is now dead.
 pub fn finalize(bytes: &[u8], options: &Finalize) -> Result<Vec<u8>, SliceError> {
     let font = FontRef::new(bytes).map_err(|e| SliceError::Read(e.to_string()))?;
@@ -183,9 +203,10 @@ pub fn finalize(bytes: &[u8], options: &Finalize) -> Result<Vec<u8>, SliceError>
             .map_err(|e| SliceError::Write(e.to_string()))?;
     }
 
+    // Only rewritten when there is something to change; a table left alone is copied
+    // through verbatim, which is both faster and impossible to get wrong.
     if let Some(slant) = axis_value(&options.location, "slnt") {
-        if let Ok(post) = font.post() {
-            let mut post: write_fonts::tables::post::Post = post.to_owned_table();
+        if let Some(mut post) = owned_post(&font) {
             post.italic_angle = Fixed::from_f64(slant.clamp(-90.0, 90.0));
             builder
                 .add_table(&post)
