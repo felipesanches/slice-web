@@ -56,3 +56,40 @@ jobs:
       # Runs the real fontTools on the same inputs and diffs the results, which is the
       # only check here that can catch a step being skipped altogether.
       - run: tools/compare-with-fonttools.py
+
+  conformance:
+    name: Conformance corpus
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # PyQt5 needs these to import, even though nothing here opens a window: the
+      # corpus drives the original as a library and never constructs a QApplication.
+      - run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1
+      - run: cargo build -p slice-cli
+
+      # The fixtures are generated, and `build.py` asserts the properties each one
+      # exists to have -- that `overlapping`'s bars really overlap, that `composites`
+      # nests two deep. Rebuilding here catches a fixture edited by hand into
+      # something that no longer tests what its cases assume.
+      - name: Fixtures rebuild identically
+        run: |
+          python3 -m venv .suite-venv
+          .suite-venv/bin/pip install -q "fonttools[woff]==4.62.1" brotli
+          sha256sum tests/suite/fixtures/out/* > /tmp/fixtures.before
+          .suite-venv/bin/python tests/suite/fixtures/build.py
+          sha256sum -c /tmp/fixtures.before
+
+      # Runs every case against both programs. Exits non-zero only when *this*
+      # implementation fails one: the original's failures are adjudicated in
+      # docs/adjudication.md and are expected.
+      - run: tests/suite/run.py --verbose
+
+      # The plain-English documentation is generated from the cases, so a case added
+      # without regenerating it would ship an incomplete description of the suite.
+      - name: Test-suite documentation is up to date
+        run: tests/suite/gen-docs.py --check
