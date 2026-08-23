@@ -62,6 +62,7 @@ from fontTools.otlLib.builder import buildStatTable
 from fontTools.pens.t2CharStringPen import T2CharStringPen
 from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import TTFont, newTable
+from fontTools.ttLib.tables import otTables
 from fontTools.ttLib.tables.ttProgram import Program
 from fontTools.varLib import build as varlib_build
 from fontTools.varLib.instancer import instantiateVariableFont
@@ -70,6 +71,8 @@ HERE = Path(__file__).resolve().parent
 OUT = HERE / "out"
 REPO = HERE.parents[2]
 RECURSIVE_TTF = REPO / "testdata" / "fonts" / "Recursive-VF.subset.ttf"
+#: A Recursive instance that was already sliced: the same design, no ``fvar``.
+RECURSIVE_STATIC = REPO / "testdata" / "fonts" / "Recursive-Sliced.subset.ttf"
 
 #: 2000-01-01T00:00:00Z expressed in the ``head`` epoch (seconds since
 #: 1904-01-01).  96 years * 365 days + 24 leap days = 35064 days.
@@ -369,21 +372,30 @@ def two_axis_master(stem, width_scale, family):
     return fb.font
 
 
-def build_two_axis(with_avar):
-    """wght x wdth, simple contours only.  ``with_avar`` toggles the axis maps."""
-    family = "FixtureTwoAxis" if with_avar else "FixtureNoAvar"
+def build_two_axis(with_avar, family=None):
+    """wght x wdth, simple contours only.  ``with_avar`` toggles the axis maps.
+
+    ``wdth`` spans the whole registered range, 50 to 200 with a default of 100.
+    That is deliberate and load-bearing: ``OS/2.usWidthClass`` is derived from a
+    pinned ``wdth`` through a nine-node piecewise-linear map over exactly that
+    interval, and fontTools clamps a pin into the *axis* extent before consulting
+    the map.  A narrower fixture would therefore answer a question nobody asked --
+    a case pinning ``wdth=175`` on a 75/100/125 axis silently measures 125.
+    """
+    if family is None:
+        family = "FixtureTwoAxis" if with_avar else "FixtureNoAvar"
     wght_map = [(100, 100), (400, 400), (700, 800), (900, 900)] if with_avar else None
-    wdth_map = [(75, 75), (100, 100), (125, 125)] if with_avar else None
+    wdth_map = [(50, 50), (100, 100), (200, 200)] if with_avar else None
     axes = [
         axis("wght", "Weight", 100, 400, 900, wght_map),
-        axis("wdth", "Width", 75, 100, 125, wdth_map),
+        axis("wdth", "Width", 50, 100, 200, wdth_map),
     ]
     designs = [
         ({"Weight": 400, "Width": 100}, "default", 90, 1.00, True),
         ({"Weight": 100, "Width": 100}, "thin", 40, 1.00, False),
         ({"Weight": 900, "Width": 100}, "black", 200, 1.00, False),
-        ({"Weight": 400, "Width": 75}, "narrow", 90, 0.78, False),
-        ({"Weight": 400, "Width": 125}, "wide", 90, 1.22, False),
+        ({"Weight": 400, "Width": 50}, "narrow", 90, 0.62, False),
+        ({"Weight": 400, "Width": 200}, "wide", 90, 1.60, False),
     ]
     sources = [
         source(two_axis_master(stem, scale, family), loc, name, is_default)
@@ -394,6 +406,13 @@ def build_two_axis(with_avar):
         raise AssertionError("two-axis: expected an avar table")
     if not with_avar and "avar" in vf:
         raise AssertionError("no-avar: an avar table was produced anyway")
+    extents = {a.axisTag: (a.minValue, a.defaultValue, a.maxValue) for a in vf["fvar"].axes}
+    if extents.get("wdth") != (50.0, 100.0, 200.0):
+        raise AssertionError(
+            f"two-axis: wdth must span the registered 50/100/200, got {extents.get('wdth')}"
+        )
+    if extents.get("wght", (0, 0, 0))[0] > 400 or extents.get("wght", (0, 0, 0))[2] < 400:
+        raise AssertionError("two-axis: wght must include 400")
     return vf
 
 
@@ -430,8 +449,25 @@ def build_single_axis_min_default():
     return make_vf(axes, sources)
 
 
-COMPOSITE_GLYPHS = [".notdef", "square", "dot", "squaredot", "double"]
-COMPOSITE_CMAP = {0x41: "square", 0x42: "dot", 0x43: "squaredot", 0x44: "double"}
+COMPOSITE_GLYPHS = [
+    ".notdef", "square", "dot", "squaredot", "double", "comp.overlap", "comp.plain",
+]
+COMPOSITE_CMAP = {
+    0x41: "square",
+    0x42: "dot",
+    0x43: "squaredot",
+    0x44: "double",
+    0x45: "comp.overlap",
+    0x46: "comp.plain",
+}
+
+#: ``comp.overlap``'s second ``square`` sits here, far enough in to overlap the
+#: first in both masters (``square`` is 400 units in the default and 470 in the
+#: black) and far enough out that the pair still fits inside the 760-unit advance.
+COMP_OVERLAP_OFFSET = (180, 160)
+#: ``comp.plain``'s two ``dot`` components.  ``dot`` is 120 units square and does
+#: not vary, so 0 and 300 leave a 180-unit gap at every location on the axis.
+COMP_PLAIN_OFFSETS = (0, 300)
 
 
 def composite_master(size, dx, dy):
@@ -454,8 +490,61 @@ def composite_master(size, dx, dy):
     pen.addComponent("squaredot", (1, 0, 0, 1, 0, 0))
     pen.addComponent("dot", (1, 0, 0, 1, 500 + dx, 0))
     glyphs["double"] = pen.glyph()
+    # two components that overlap each other.  The merged boundary cannot be
+    # written as component references, so removing the overlap has to decompose
+    # the glyph first.  The offsets do not vary, so the overlap is the same at
+    # every location on the axis.
+    pen = TTGlyphPen(glyphs)
+    pen.addComponent("square", (1, 0, 0, 1, 0, 0))
+    pen.addComponent("square", (1, 0, 0, 1, *COMP_OVERLAP_OFFSET))
+    glyphs["comp.overlap"] = pen.glyph()
+    # two components that never touch: nothing to merge, so the glyph must come
+    # out the far side of overlap removal still a composite.
+    pen = TTGlyphPen(glyphs)
+    for offset in COMP_PLAIN_OFFSETS:
+        pen.addComponent("dot", (1, 0, 0, 1, offset, 0))
+    glyphs["comp.plain"] = pen.glyph()
     fb.setupGlyf(glyphs)
     return fb.font
+
+
+def _component_boxes(font, glyph_name, location=None):
+    """Bounding box of each of a composite's components, in font units."""
+    static = font
+    if location is not None and "fvar" in font:
+        static = instantiateVariableFont(copy.deepcopy(font), location, inplace=False)
+    glyf = static["glyf"]
+    boxes = []
+    for component in glyf[glyph_name].components:
+        base = glyf[component.glyphName]
+        base.recalcBounds(glyf)
+        dx, dy = component.getComponentInfo()[1][4:6]
+        boxes.append((base.xMin + dx, base.yMin + dy, base.xMax + dx, base.yMax + dy))
+    return boxes
+
+
+def _components_overlap(font, glyph_name):
+    """True when any two of a composite's components share area.
+
+    Bounding boxes are the whole story here because every component in this fixture
+    is a filled rectangle, so a box intersection *is* an area intersection.  Checked
+    at the default and at the axis maximum, because a component offset that varies
+    could otherwise separate a pair at one end of the axis and not the other.
+    """
+    results = set()
+    for location in ({"wght": 400}, {"wght": 900}):
+        boxes = _component_boxes(font, glyph_name, location)
+        overlap = any(
+            a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+            for i, a in enumerate(boxes)
+            for b in boxes[i + 1 :]
+        )
+        results.add(overlap)
+    if len(results) != 1:
+        raise AssertionError(
+            f"composites: {glyph_name} overlaps at one end of the axis but not the other"
+        )
+    return results.pop()
 
 
 def build_composites():
@@ -489,6 +578,15 @@ def build_composites():
     depth = component_depth("double")
     if depth < 2:
         raise AssertionError(f"composites: `double` nests {depth} deep, want >= 2")
+    for name, want_overlap in (("comp.overlap", True), ("comp.plain", False)):
+        glyph = glyf[name]
+        if not glyph.isComposite() or len(glyph.components) != 2:
+            raise AssertionError(f"composites: {name} must be a 2-component composite")
+        got = _components_overlap(vf, name)
+        if got != want_overlap:
+            raise AssertionError(
+                f"composites: {name} components overlap={got}, want {want_overlap}"
+            )
     for name in ("squaredot", "double"):
         variations = vf["gvar"].variations.get(name)
         if not variations:
@@ -506,6 +604,90 @@ def build_composites():
                     f"composites: {name} has no gvar delta on any component offset"
                 )
     return vf
+
+
+#: Windows / Unicode BMP, US English -- the only key the Slice name editor reads or
+#: writes, which is exactly what makes a record on any other key worth having here.
+WINDOWS_ENGLISH = (3, 1, 0x0409)
+#: Windows / Unicode BMP, German (Germany).  1031 == 0x0407.
+WINDOWS_GERMAN = (3, 1, 0x0407)
+
+#: The four optional family-name records, at 3/1/1033.  No other fixture in the
+#: roster has any of them, so without these the claim that an implementation strips
+#: IDs 16, 17, 21 and 22 has nothing to be tested against.  The strings are
+#: deliberately different from IDs 1 and 2 so a case can tell which record was read.
+OPTIONAL_FAMILY_NAMES = {
+    16: "Fixture Family",            # typographic family
+    17: "Named Instances",           # typographic subfamily
+    21: "Fixture WWS Family",        # WWS family
+    22: "Named Instances Regular",   # WWS subfamily
+}
+
+#: A German localisation, at 3/1/1031.  Two of the strings are non-ASCII, so the
+#: fixture also carries a UTF-16BE round trip through a record the user never typed.
+#: Only IDs the editor exposes are localised, and none of them is mirrored onto the
+#: Macintosh platform, whose single-byte encodings could not hold "Uberschrift" with
+#: its umlaut anyway.
+GERMAN_NAMES = {
+    1: "FixtureNamedInstances Deutsch",
+    2: "Standard",
+    16: "Fixture Familie",
+    17: "\u00dcberschrift",
+}
+
+#: A stylistic-set label, referenced from GSUB rather than from fvar or STAT.  Name
+#: IDs above 255 are pruned when the variation tables stop pointing at them, and this
+#: one is the control for that: nothing in fvar or STAT ever pointed at it, so it must
+#: survive every slice.  276 is the first ID above everything varLib and buildStatTable
+#: allocate for this fixture, and :func:`add_stylistic_set` asserts it was free.
+SS01_NAME_ID = 276
+SS01_LABEL = "Alternate H"
+
+SS01_FEA = """
+languagesystem DFLT dflt;
+languagesystem latn dflt;
+
+feature ss01 {
+    sub H by O;
+} ss01;
+"""
+
+
+def add_localised_names(font):
+    """Add the optional family names and the German localisation."""
+    name = font["name"]
+    for name_id, string in sorted(OPTIONAL_FAMILY_NAMES.items()):
+        name.setName(string, name_id, *WINDOWS_ENGLISH)
+    for name_id, string in sorted(GERMAN_NAMES.items()):
+        name.setName(string, name_id, *WINDOWS_GERMAN)
+    # fontTools sorts on compile, but sorting here too keeps the in-memory table
+    # in the order the specification requires, so the assertion below is about the
+    # fixture rather than about when fontTools happens to tidy up.
+    name.names.sort()
+
+
+def add_stylistic_set(font):
+    """A GSUB ``ss01`` whose ``FeatureParams`` names a name record.
+
+    feaLib would allocate the label's name ID itself, from wherever the table happens
+    to end; the ID is written out explicitly instead so that it is a stable, quotable
+    number a case can name, and so that adding an instance or a STAT value later
+    cannot silently move it.
+    """
+    if any(record.nameID == SS01_NAME_ID for record in font["name"].names):
+        raise AssertionError(f"named-instances: name ID {SS01_NAME_ID} is already taken")
+    addOpenTypeFeaturesFromString(font, SS01_FEA)
+    font["name"].setName(SS01_LABEL, SS01_NAME_ID, *WINDOWS_ENGLISH)
+    for record in font["GSUB"].table.FeatureList.FeatureRecord:
+        if record.FeatureTag == "ss01":
+            params = otTables.FeatureParamsStylisticSet()
+            params.Version = 0
+            params.UINameID = SS01_NAME_ID
+            record.Feature.FeatureParams = params
+            break
+    else:
+        raise AssertionError("named-instances: feaLib built no ss01 feature")
+    font["name"].names.sort()
 
 
 def build_named_instances():
@@ -589,17 +771,76 @@ def build_named_instances():
         raise AssertionError(
             f"named-instances: STAT has axis values only on {valued}, want every axis"
         )
+
+    add_localised_names(vf)
+    add_stylistic_set(vf)
+    check_named_instance_names(vf)
     return finalize(vf)
+
+
+def check_named_instance_names(font):
+    """The name records and the GSUB label the corpus expects, all four keys checked."""
+    name = font["name"]
+    for name_id, string in OPTIONAL_FAMILY_NAMES.items():
+        record = name.getName(name_id, *WINDOWS_ENGLISH)
+        if record is None or record.toUnicode() != string:
+            raise AssertionError(f"named-instances: 3/1/1033 name {name_id} is not {string!r}")
+        if name.getName(name_id, 1, 0, 0) is not None:
+            raise AssertionError(
+                f"named-instances: name {name_id} must not be mirrored onto platform 1"
+            )
+    for name_id, string in GERMAN_NAMES.items():
+        record = name.getName(name_id, *WINDOWS_GERMAN)
+        if record is None or record.toUnicode() != string:
+            raise AssertionError(f"named-instances: 3/1/1031 name {name_id} is not {string!r}")
+        if record.getEncoding() != "utf_16_be":
+            raise AssertionError(
+                f"named-instances: 3/1/1031 name {name_id} is {record.getEncoding()},"
+                " want utf_16_be"
+            )
+    counts = {1: 3, 2: 3, 16: 2, 17: 2, 21: 1, 22: 1}
+    for name_id, want in counts.items():
+        got = sum(1 for r in name.names if r.nameID == name_id)
+        if got != want:
+            raise AssertionError(
+                f"named-instances: {got} records with name ID {name_id}, want {want}"
+            )
+    label = name.getName(SS01_NAME_ID, *WINDOWS_ENGLISH)
+    if label is None or label.toUnicode() != SS01_LABEL:
+        raise AssertionError(f"named-instances: name {SS01_NAME_ID} is not the ss01 label")
+    features = {
+        record.FeatureTag: record.Feature
+        for record in font["GSUB"].table.FeatureList.FeatureRecord
+    }
+    if "ss01" not in features:
+        raise AssertionError("named-instances: no ss01 feature")
+    params = features["ss01"].FeatureParams
+    if params is None or params.UINameID != SS01_NAME_ID:
+        raise AssertionError(
+            "named-instances: ss01 FeatureParams does not point at name "
+            f"{SS01_NAME_ID}"
+        )
+    if not features["ss01"].LookupListIndex:
+        raise AssertionError("named-instances: ss01 has no lookups to hang the label on")
+    keys = [(r.platformID, r.platEncID, r.langID, r.nameID) for r in name.names]
+    if keys != sorted(keys):
+        raise AssertionError("named-instances: name records are not in the required order")
 
 
 # -- overlapping ----------------------------------------------------------
 
-OVERLAP_GLYPHS = [".notdef", "plus", "ring", "circled", "bowtie"]
-OVERLAP_CMAP = {0x2B: "plus", 0x6F: "ring", 0x40: "circled", 0x78: "bowtie"}
+OVERLAP_GLYPHS = [".notdef", "bars", "o", "circled", "bowtie", "clean"]
+OVERLAP_CMAP = {
+    0x2B: "bars",
+    0x6F: "o",
+    0x40: "circled",
+    0x78: "bowtie",
+    0x63: "clean",
+}
 
 
 def overlap_contours(g):
-    """The four overlap glyphs, parameterised by a single growth amount ``g``.
+    """The five overlap glyphs, parameterised by a single growth amount ``g``.
 
     ``g`` is 0 in the default master and positive in the heavy master; every
     boundary moves outward by ``g`` and every counter inward by ``g``, so the
@@ -609,12 +850,12 @@ def overlap_contours(g):
     return {
         # two crossing bars.  Both wound clockwise, so the overlap in the
         # middle has winding -2: filled under non-zero, a hole under even-odd.
-        "plus": [
+        "bars": [
             cw_rect(50, 300 - g, 750, 400 + g),
             cw_rect(350 - g, 0, 450 + g, 700),
         ],
         # an 'o': clockwise outer square with a counter-clockwise counter.
-        "ring": [
+        "o": [
             cw_rect(50 - g, 50 - g, 750 + g, 650 + g),
             ccw_rect(200 + g, 200 + g, 600 - g, 500 - g),
         ],
@@ -631,6 +872,12 @@ def overlap_contours(g):
         "bowtie": [
             [(100 - g, 100 - g), (600 + g, 600 + g), (100 - g, 600 + g), (600 + g, 100 - g)]
         ],
+        # the control: one clockwise triangle.  No second contour to overlap, and
+        # three straight edges that cannot cross each other, so there is nothing
+        # for an overlap remover to do and it must hand the glyph back untouched.
+        "clean": [
+            [(400, 650 + g), (700 + g, 0), (100 - g, 0)]
+        ],
     }
 
 
@@ -638,14 +885,14 @@ def overlap_contours(g):
 #: region of every glyph, including the ones that must be empty.  They are
 #: chosen to stay in the same region across the whole axis.
 OVERLAP_PROBES = [
-    ("plus", (400, 350), 2, "both bars overlap"),
-    ("plus", (150, 350), 1, "horizontal bar only"),
-    ("plus", (400, 620), 1, "vertical bar only"),
-    ("plus", (150, 620), 0, "outside both bars"),
-    ("plus", (900, 350), 0, "right of everything"),
-    ("ring", (100, 350), 1, "the ring band"),
-    ("ring", (400, 350), 0, "the counter"),
-    ("ring", (900, 350), 0, "outside"),
+    ("bars", (400, 350), 2, "both bars overlap"),
+    ("bars", (150, 350), 1, "horizontal bar only"),
+    ("bars", (400, 620), 1, "vertical bar only"),
+    ("bars", (150, 620), 0, "outside both bars"),
+    ("bars", (900, 350), 0, "right of everything"),
+    ("o", (100, 350), 1, "the ring band"),
+    ("o", (400, 350), 0, "the counter"),
+    ("o", (900, 350), 0, "outside"),
     ("circled", (60, 350), 1, "outer ring band"),
     ("circled", (150, 350), 0, "the outer counter"),
     ("circled", (240, 350), 1, "the inner filled square"),
@@ -655,15 +902,27 @@ OVERLAP_PROBES = [
     ("bowtie", (350, 200), 1, "lower lobe"),
     ("bowtie", (150, 350), 0, "outside, level with the crossing"),
     ("bowtie", (900, 350), 0, "outside"),
+    ("clean", (400, 100), 1, "inside the triangle, once and only once"),
+    ("clean", (400, 400), 1, "inside, high up where the sides close in"),
+    ("clean", (150, 500), 0, "outside, left of the rising edge"),
+    ("clean", (650, 500), 0, "outside, right of the falling edge"),
+    ("clean", (400, 720), 0, "outside, above the apex"),
+    ("clean", (900, 350), 0, "outside"),
 ]
 
 #: Expected orientation of each contour, as the sign of its signed area.
 #: -1 is clockwise (a TrueType outer contour), +1 counter-clockwise (a counter).
 OVERLAP_ORIENTATIONS = {
-    "plus": [-1, -1],
-    "ring": [-1, +1],
+    "bars": [-1, -1],
+    "o": [-1, +1],
     "circled": [-1, +1, -1, +1],
+    "clean": [-1],
 }
+
+#: Glyph -> the largest winding magnitude that may appear anywhere in it.  1 means
+#: "nothing anywhere in this glyph is covered twice", which is the property that
+#: makes ``clean`` a control; ``bars`` is listed as its opposite number.
+OVERLAP_MAX_WINDING = {"clean": 1, "bars": 2, "o": 1, "circled": 1, "bowtie": 1}
 
 
 def overlap_master(g):
@@ -688,8 +947,33 @@ def build_overlapping():
     return make_vf(axes, sources)
 
 
+def scan_max_winding(contours, samples=(53, 47)):
+    """Largest |winding| anywhere in the glyph, from a grid over its bounding box.
+
+    The probe list says what the winding is in the regions the author thought of.
+    This says what it is everywhere, which is the only way to state the negative
+    property ``clean`` exists for: *no* part of it is covered twice.  The grid is
+    offset by half a step and uses two counts that share no factor, so a sample
+    landing exactly on an edge -- where the winding is not defined -- is unlikely,
+    and the strides never line up with an axis-aligned edge of these glyphs.
+    """
+    xs = [x for contour in contours for x, _ in contour]
+    ys = [y for contour in contours for _, y in contour]
+    nx, ny = samples
+    worst = 0
+    where = None
+    for i in range(nx):
+        x = min(xs) - 20 + (max(xs) - min(xs) + 40) * ((i + 0.5) / nx)
+        for j in range(ny):
+            y = min(ys) - 20 + (max(ys) - min(ys) + 40) * ((j + 0.5) / ny)
+            w = abs(winding_number((x, y), contours))
+            if w > worst:
+                worst, where = w, (x, y)
+    return worst, where
+
+
 def check_overlapping_windings(font, report):
-    """Prove the four overlap glyphs are filled the way they are meant to be.
+    """Prove the five overlap glyphs are filled the way they are meant to be.
 
     Reads the contours back out of the compiled ``glyf`` (not out of the source
     data structures), checks contour orientation by signed area, and evaluates
@@ -729,6 +1013,23 @@ def check_overlapping_windings(font, report):
             report(
                 f"    {label} {glyph_name} {point}: winding {w:+d} -> "
                 f"{'FILLED' if w else 'empty '}  ({why})"
+            )
+        for glyph_name, expected_max in sorted(OVERLAP_MAX_WINDING.items()):
+            contours = glyph_contours(static, glyph_name)
+            worst, where = scan_max_winding(contours)
+            if worst != expected_max:
+                raise AssertionError(
+                    f"overlapping/{glyph_name} at {label}: largest |winding| over "
+                    f"the glyph is {worst} (at {where}), expected {expected_max}"
+                )
+            verdict = (
+                "no region is covered twice -- nothing to remove"
+                if worst <= 1
+                else f"{worst} layers deep somewhere -- there is an overlap to remove"
+            )
+            report(
+                f"    {label} {glyph_name}: largest |winding| anywhere is "
+                f"{worst}, {verdict}"
             )
 
 
@@ -955,6 +1256,55 @@ def build_cff2():
     return vf
 
 
+# -- static-ttf ------------------------------------------------------------
+
+def build_static_ttf():
+    """A TrueType font with no ``fvar``: Recursive, already sliced.
+
+    Copied verbatim from ``testdata/fonts/Recursive-Sliced.subset.ttf`` -- an
+    instance of the same family ``recursive-vf`` comes from, so a case that hands
+    it to a slicer is handing over a real static font rather than a stripped-down
+    imitation of one.  Every other fixture in the roster except ``cff2-vf`` is
+    variable, so without this there is nothing to test the refusal against.
+    """
+    data = RECURSIVE_STATIC.read_bytes()
+    font = TTFont(io.BytesIO(data), recalcTimestamp=False, lazy=True)
+    for table in ("fvar", "gvar", "avar", "HVAR", "MVAR", "STAT"):
+        if table in font:
+            raise AssertionError(f"static-ttf: {table} is present; it must not be variable")
+    if "glyf" not in font:
+        raise AssertionError("static-ttf: expected TrueType outlines")
+    font.close()
+    return data
+
+
+# -- with-dsig -------------------------------------------------------------
+
+def build_with_dsig():
+    """``two-axis`` again, plus a stub ``DSIG``.
+
+    ``DSIG`` is a signature over the whole font file, so instancing invalidates it
+    and it has to be dropped rather than carried over.  No fixture in the roster
+    had one -- ``recursive-vf`` does not, and it is copied verbatim so it cannot
+    gain one without the 170-odd cases that compare against it changing underneath
+    them -- which made the deletion claim vacuous: the check passed on a font that
+    never had the table.  A separate fixture makes it real without disturbing
+    anything.  The stub is the empty, unsigned form (``usNumSigs`` 0) that font
+    tools routinely emit, which is enough: the property under test is that the
+    table is gone, not what was in it.
+    """
+    vf = build_two_axis(with_avar=True, family="FixtureWithDsig")
+    dsig = newTable("DSIG")
+    dsig.ulVersion = 1
+    dsig.usFlag = 1
+    dsig.usNumSigs = 0
+    dsig.signatureRecords = []
+    vf["DSIG"] = dsig
+    if "DSIG" not in vf:
+        raise AssertionError("with-dsig: the DSIG table did not stick")
+    return finalize(vf)
+
+
 # --------------------------------------------------------------------------
 # verification
 # --------------------------------------------------------------------------
@@ -1018,9 +1368,13 @@ def verify_font(name, data, report):
         detail += f", instanced at {len(locations)} locations"
     else:
         detail += ", static"
+    if name == "with-dsig.ttf" and "DSIG" not in font:
+        raise AssertionError("with-dsig.ttf: DSIG did not survive serialisation")
+    if name == "static-ttf.ttf" and "fvar" in font:
+        raise AssertionError("static-ttf.ttf: must not have an fvar")
 
     optional = sorted({"avar", "gvar", "STAT", "HVAR", "GDEF", "GPOS", "GSUB",
-                       "fpgm", "prep", "cvt "} & set(font.keys()))
+                       "fpgm", "prep", "cvt ", "DSIG"} & set(font.keys()))
     if optional:
         detail += ", has " + " ".join(t.strip() for t in optional)
     report(f"    {detail}")
@@ -1047,6 +1401,8 @@ def build_all(report):
     fonts.append(("hinted.ttf", to_bytes(build_hinted())))
     fonts.append(("gdef-varstore.ttf", to_bytes(build_gdef_varstore())))
     fonts.append(("cff2-vf.otf", to_bytes(build_cff2())))
+    fonts.append(("static-ttf.ttf", build_static_ttf()))
+    fonts.append(("with-dsig.ttf", to_bytes(build_with_dsig())))
     return fonts
 
 
@@ -1059,9 +1415,10 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
 
-    if not RECURSIVE_TTF.is_file():
-        print(f"missing source font: {RECURSIVE_TTF}", file=sys.stderr)
-        return 2
+    for path in (RECURSIVE_TTF, RECURSIVE_STATIC):
+        if not path.is_file():
+            print(f"missing source font: {path}", file=sys.stderr)
+            return 2
 
     lines = []
     report = lines.append
