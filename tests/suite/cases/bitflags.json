@@ -1,0 +1,1703 @@
+{
+  "area": "bitflags",
+  "_proposed_checks": [
+    {
+      "kind": "warns",
+      "fields": {
+        "substrings": "list of strings, matched case-insensitively, all of which must appear in the warning text"
+      },
+      "passes_when": "the job completed successfully AND the tool emitted at least one diagnostic, on a channel distinct from the error path, containing all the substrings",
+      "why": "The E5 verdict is 'allow it, but say so'. With only outcome: success | error, a case can assert that a contradictory bit combination was not refused and that the bits were written, but it cannot assert that the user was told anything. That makes the entire warn-versus-silence distinction untestable: a tool that silently writes a non-conformant fsSelection scores identically to one that warns, so the corpus would be endorsing the behaviour the behaviour map calls a defect. The same kind would serve B10's out-of-range pin, which is also proposed as warn-not-refuse, so it is not a one-case convenience.",
+      "cases_that_need_it": [
+        "bitflags.contradiction-regular-and-bold",
+        "bitflags.contradiction-regular-and-italic",
+        "bitflags.contradiction-fsselection-bold-without-macstyle-bold",
+        "bitflags.contradiction-macstyle-italic-without-fsselection",
+        "bitflags.contradiction-not-refused",
+        "bitflags.all-six-set-preserves-unexposed",
+        "bitflags.macstyle-edit-does-not-disturb-fsselection"
+      ],
+      "example": {
+        "kind": "warns",
+        "substrings": [
+          "fsSelection",
+          "bit 6",
+          "bit 5"
+        ]
+      }
+    },
+    {
+      "kind": "no_warnings",
+      "fields": {},
+      "passes_when": "the job completed successfully and the tool emitted no diagnostics at all",
+      "why": "Without a negative control, 'warns' is trivially satisfiable by a tool that warns on every run, and such a tool trains its users to ignore the warning. The conformant Bold, Italic and Bold Italic declarations are exactly the combinations that must pass unremarked, since they satisfy both the OS/2 mutual-exclusion rule and the head agreement rule. Cheap to implement alongside 'warns' and it is what gives that check its meaning.",
+      "cases_that_need_it": [
+        "bitflags.consistent-bold-pair",
+        "bitflags.consistent-italic-pair",
+        "bitflags.consistent-bold-italic-pair",
+        "bitflags.bold-bit-on-light-weight-is-allowed",
+        "bitflags.untouched-editor-preserves-fsselection"
+      ],
+      "example": {
+        "kind": "no_warnings"
+      }
+    },
+    {
+      "kind": "field_matches_source",
+      "fields": {
+        "table": "OS/2 | head | post | hhea | maxp",
+        "field": "attribute name"
+      },
+      "passes_when": "the named field in the output equals the same field in the source fixture",
+      "why": "The E4 cases are about preservation, not about a particular number, but the only available spelling is os2_field equals 192, which hard-codes a property of recursive-vf. If the fixture is ever regenerated the case does not fail loudly, it starts testing the wrong thing -- and the preservation claim cannot be stated at all on a fixture whose starting value the case author does not know, which is why bitflags.two-axis-* can only make the weaker bit_set / bit_clear assertions. Optional: the concrete form works today, so nothing here is blocked on it.",
+      "cases_that_need_it": [
+        "bitflags.untouched-editor-preserves-fsselection",
+        "bitflags.untouched-editor-preserves-bits-in-static-instance",
+        "bitflags.macstyle-edit-does-not-disturb-fsselection"
+      ],
+      "example": {
+        "kind": "field_matches_source",
+        "table": "OS/2",
+        "field": "fsSelection"
+      }
+    }
+  ],
+  "cases": [
+    {
+      "id": "bitflags.fsselection-bit0-set",
+      "title": "Ticking OS/2.fsSelection bit 0 sets ITALIC",
+      "covers": [
+        "E1",
+        "E3"
+      ],
+      "class": "slice-ui",
+      "rationale": "The OpenType OS/2 specification defines fsSelection bit 0 ITALIC as \"Font contains italic or oblique glyphs, otherwise they are upright\", so the bit is a declaration about the glyphs and is exactly the kind of thing a slicing tool must let the operator restate after pinning a slant axis. The editor exposes this checkbox (E1), so ticking it must set that one bit and leave the rest of the 16-bit field as the font had it. The fixture's fsSelection is 0xC0 (bits 6 and 7), so the correct result is 0xC1 = 193. The output is spec-inconsistent because bit 6 REGULAR remains set alongside bit 0; that is deliberate here to keep this case about the single checkbox, and the contradiction itself is adjudicated by the bitflags.contradiction-* cases.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "fsSelection": {
+            "0": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 0
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 193
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 7
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.fsselection-bit0-clear",
+      "title": "Unticking OS/2.fsSelection bit 0 leaves ITALIC clear",
+      "covers": [
+        "E1",
+        "E3"
+      ],
+      "class": "slice-ui",
+      "rationale": "Clearing a bit that is already clear must be a no-op on the whole field, not an excuse to rewrite it. The fixture is Recursive Sans Linear Light, an upright face whose fsSelection is 0xC0, so bit 0 ITALIC is already 0 and the OS/2 specification's description of bit 0 (\"Font contains italic or oblique glyphs, otherwise they are upright\") is already truthful. The output must therefore still be 0xC0 = 192, with bits 6 REGULAR and 7 USE_TYPO_METRICS untouched. This is the idempotence half of E3.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "fsSelection": {
+            "0": false
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "bit_clear",
+            "field": "fsSelection",
+            "bit": 0
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 192
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.fsselection-bit5-set",
+      "title": "Ticking OS/2.fsSelection bit 5 sets BOLD",
+      "covers": [
+        "E1",
+        "E3"
+      ],
+      "class": "slice-ui",
+      "rationale": "The OS/2 specification defines fsSelection bit 5 BOLD as \"Glyphs are emboldened\". A user who has just pinned a variable weight axis at its heavy end is the canonical reason this checkbox exists, since instancing sets usWeightClass from the pinned location but never touches the style bits. Ticking bit 5 must OR 0x20 into the existing 0xC0, giving 0xE0 = 224, and must not disturb bit 7 USE_TYPO_METRICS, which the editor does not expose.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "fsSelection": {
+            "5": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 5
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 224
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 7
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.fsselection-bit5-clear",
+      "title": "Unticking OS/2.fsSelection bit 5 leaves BOLD clear",
+      "covers": [
+        "E1",
+        "E3"
+      ],
+      "class": "slice-ui",
+      "rationale": "The fixture is a Light face with usWeightClass 300 and fsSelection 0xC0, so bit 5 BOLD is already 0, which is what the OS/2 specification's \"Glyphs are emboldened\" requires of a font whose glyphs are not emboldened. An unticked checkbox for an already-clear bit must leave the field at 192; producing any other value would mean the editor is writing state it invented rather than state the user expressed.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "fsSelection": {
+            "5": false
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "bit_clear",
+            "field": "fsSelection",
+            "bit": 5
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 192
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.fsselection-bit6-set",
+      "title": "Ticking OS/2.fsSelection bit 6 sets REGULAR",
+      "covers": [
+        "E1",
+        "E3"
+      ],
+      "class": "slice-ui",
+      "rationale": "The OS/2 specification defines fsSelection bit 6 REGULAR as \"Glyphs are in the standard weight/style for the font\", and this fixture already declares itself Regular: its fsSelection is 0xC0, bits 6 and 7. A ticked bit-6 checkbox therefore asks for the state the font already has, and the output must still be 192. This case pins down that setting a bit is an assignment to 1, not a toggle; a toggle implementation would clear bit 6 here and produce 128.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "fsSelection": {
+            "6": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 6
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 192
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.fsselection-bit6-clear",
+      "title": "Unticking OS/2.fsSelection bit 6 clears REGULAR, and only that bit",
+      "covers": [
+        "E1",
+        "E3"
+      ],
+      "class": "slice-ui",
+      "rationale": "Clearing REGULAR is a legitimate request when the operator is about to declare the sliced instance Bold or Italic instead, since the OS/2 specification makes bit 6 mutually exclusive with bits 0 and 5. What must not happen is collateral damage: the fixture's 0xC0 must become 0x80 = 128, retaining bit 7 USE_TYPO_METRICS, which the editor does not expose. Note that 128 is also what the original writes for an untouched editor, for the wrong reason (E4) -- here it is correct because the user asked for it.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "fsSelection": {
+            "6": false
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "bit_clear",
+            "field": "fsSelection",
+            "bit": 6
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 128
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 7
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.fsselection-bit8-set",
+      "title": "Ticking OS/2.fsSelection bit 8 sets WWS",
+      "covers": [
+        "E1",
+        "E3"
+      ],
+      "class": "slice-ui",
+      "rationale": "The OS/2 specification defines fsSelection bit 8 WWS as meaning the font \"has 'name' table strings consistent with a weight/width/slope family without requiring use of name IDs 21 and 22\". Slicing changes exactly the thing that claim is about -- the name records and the surviving design space -- so the operator must be able to assert or retract it. Setting bit 8 on the fixture's 0xC0 must give 0x1C0 = 448, which also proves the editor handles a bit above the low byte correctly.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "fsSelection": {
+            "8": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 8
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 448
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 6
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 7
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.fsselection-bit8-clear",
+      "title": "Unticking OS/2.fsSelection bit 8 leaves WWS clear",
+      "covers": [
+        "E1",
+        "E3"
+      ],
+      "class": "slice-ui",
+      "rationale": "The fixture does not set bit 8, so it makes no WWS claim, and an unticked checkbox must leave that so: the field stays 192. The OS/2 specification ties bit 8 to whether name IDs 21 and 22 are needed, so a tool that spuriously set it would be asserting something about the name table it has not checked. Clearing an already-clear high bit must not smear into the low byte either.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "fsSelection": {
+            "8": false
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "bit_clear",
+            "field": "fsSelection",
+            "bit": 8
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 192
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.macstyle-bit0-set",
+      "title": "Ticking head.macStyle bit 0 sets BOLD without touching OS/2",
+      "covers": [
+        "E2",
+        "E3"
+      ],
+      "class": "slice-ui",
+      "rationale": "The OpenType head specification defines macStyle bit 0 as \"Bold (if set to 1)\" and reserves bits 7 to 15, which \"must be set to 0\". The fixture's macStyle is 0, so ticking the bit-0 checkbox must produce exactly 1: no reserved bit invented, and bit 1 ITALIC left alone. It must also leave OS/2.fsSelection at 192, because macStyle and fsSelection are separate fields edited by separate checkboxes and a head edit is not licence to rewrite OS/2.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "macStyle": {
+            "0": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "bit_set",
+            "field": "macStyle",
+            "bit": 0
+          },
+          {
+            "kind": "head_field",
+            "field": "macStyle",
+            "equals": 1
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 192
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.macstyle-bit0-clear",
+      "title": "Unticking head.macStyle bit 0 leaves BOLD clear",
+      "covers": [
+        "E2",
+        "E3"
+      ],
+      "class": "slice-ui",
+      "rationale": "The fixture's head.macStyle is 0, so bit 0 Bold is already clear and an unticked checkbox must leave the whole field at 0. The head specification requires macStyle bits 7 to 15 to be 0 and gives bits 2 to 6 specific meanings (underline, outline, shadow, condensed, extended), so a write that produced anything but 0 would be asserting styles the font does not have.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "macStyle": {
+            "0": false
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "bit_clear",
+            "field": "macStyle",
+            "bit": 0
+          },
+          {
+            "kind": "head_field",
+            "field": "macStyle",
+            "equals": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.macstyle-bit1-set",
+      "title": "Ticking head.macStyle bit 1 sets ITALIC",
+      "covers": [
+        "E2",
+        "E3"
+      ],
+      "class": "slice-ui",
+      "rationale": "The head specification defines macStyle bit 1 as \"Italic (if set to 1)\". Ticking it on a font whose macStyle is 0 must give exactly 2, leaving bit 0 Bold clear and the reserved bits at 0. This is the head-table counterpart of fsSelection bit 0, and the two are required to agree; the agreement itself is the subject of the bitflags.consistent-* and bitflags.contradiction-* cases.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "macStyle": {
+            "1": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "bit_set",
+            "field": "macStyle",
+            "bit": 1
+          },
+          {
+            "kind": "head_field",
+            "field": "macStyle",
+            "equals": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.macstyle-bit1-clear",
+      "title": "Unticking head.macStyle bit 1 leaves ITALIC clear",
+      "covers": [
+        "E2",
+        "E3"
+      ],
+      "class": "slice-ui",
+      "rationale": "The fixture is upright with macStyle 0 and post.italicAngle 0, so bit 1 Italic is correctly clear and must stay clear. Per the head specification bit 1 means \"Italic (if set to 1)\", a claim about the glyphs, and nothing in an unticked checkbox authorises changing it. The field must remain exactly 0.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "macStyle": {
+            "1": false
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "bit_clear",
+            "field": "macStyle",
+            "bit": 1
+          },
+          {
+            "kind": "head_field",
+            "field": "macStyle",
+            "equals": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.unexposed-bit7-survives-a-set",
+      "title": "USE_TYPO_METRICS survives setting an exposed bit, in a static instance",
+      "covers": [
+        "E3",
+        "G1"
+      ],
+      "class": "spec",
+      "rationale": "The fixture has fsSelection bit 7 USE_TYPO_METRICS set, and the OS/2 specification says that when it is set \"it is strongly recommended that applications use OS/2.sTypoAscender - OS/2.sTypoDescender + OS/2.sTypoLineGap as the default line spacing\". Dropping it silently changes line spacing in every application that honours it, so it is a layout regression, not a cosmetic one. The editor does not expose bit 7, so setting bit 5 BOLD must leave it set: 0xC0 becomes 0xE0 = 224. Pinning every axis at once makes the point on the static-instance path, where the most table rewriting happens.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "700",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "bits": {
+          "fsSelection": {
+            "5": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 7
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 5
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 224
+          },
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.unexposed-bit7-survives-a-clear",
+      "title": "USE_TYPO_METRICS survives clearing an exposed bit",
+      "covers": [
+        "E3"
+      ],
+      "class": "spec",
+      "rationale": "The dangerous direction for an unexposed bit is a clear, because an implementation that assembles fsSelection from the six checkboxes rather than editing the font's value will zero everything it does not know about. Clearing bit 6 REGULAR must yield exactly 0x80 = 128: bit 7 USE_TYPO_METRICS still set, bits 0, 5 and 8 still clear. The OS/2 specification treats bit 7 as vertical-metrics policy that is independent of style classification, so no style edit may disturb it.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "fsSelection": {
+            "6": false
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 7
+          },
+          {
+            "kind": "bit_clear",
+            "field": "fsSelection",
+            "bit": 0
+          },
+          {
+            "kind": "bit_clear",
+            "field": "fsSelection",
+            "bit": 5
+          },
+          {
+            "kind": "bit_clear",
+            "field": "fsSelection",
+            "bit": 6
+          },
+          {
+            "kind": "bit_clear",
+            "field": "fsSelection",
+            "bit": 8
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 128
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.all-six-cleared-preserves-unexposed",
+      "title": "Clearing all six checkboxes clears only those six",
+      "covers": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "class": "spec",
+      "rationale": "This is the worst case for bit preservation: every checkbox the editor owns is explicitly unticked, so a correct implementation must clear precisely bits 0, 5, 6 and 8 of fsSelection and bits 0 and 1 of macStyle, and nothing else. The fixture's 0xC0 must become 0x80 = 128, keeping bit 7 USE_TYPO_METRICS, and macStyle must stay 0. If an implementation ever writes 0 to fsSelection here it has thrown away the OS/2 specification's vertical-metrics opt-in along with the style bits.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "fsSelection": {
+            "0": false,
+            "5": false,
+            "6": false,
+            "8": false
+          },
+          "macStyle": {
+            "0": false,
+            "1": false
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 128
+          },
+          {
+            "kind": "head_field",
+            "field": "macStyle",
+            "equals": 0
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 7
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.all-six-set-preserves-unexposed",
+      "title": "Setting all six checkboxes ORs in only those six",
+      "covers": [
+        "E1",
+        "E2",
+        "E3",
+        "E5"
+      ],
+      "class": "spec",
+      "rationale": "Setting every exposed bit must be a pure OR against the font's existing value: 0xC0 with bits 0, 5, 6 and 8 added is 0x1E1 = 481, and macStyle 0 with bits 0 and 1 added is 3. Bit 7 USE_TYPO_METRICS must survive, and no bit the editor does not name may appear. The result is maximally self-contradictory -- the OS/2 specification makes bit 6 REGULAR mutually exclusive with bits 0 ITALIC and 5 BOLD -- and the corpus position is that this is written as asked and reported as a warning, not refused; see bitflags.contradiction-not-refused.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "fsSelection": {
+            "0": true,
+            "5": true,
+            "6": true,
+            "8": true
+          },
+          "macStyle": {
+            "0": true,
+            "1": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 481
+          },
+          {
+            "kind": "head_field",
+            "field": "macStyle",
+            "equals": 3
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 7
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.untouched-editor-preserves-fsselection",
+      "title": "An untouched Bit Flag Editor changes no bit at all",
+      "covers": [
+        "A5",
+        "E4"
+      ],
+      "class": "spec",
+      "rationale": "This is the corrected form of the E4/A5 defect and the single most important case in this area. The fixture's OS/2.fsSelection is 0xC0: bit 6 REGULAR, which the OS/2 specification describes as \"Glyphs are in the standard weight/style for the font\", plus bit 7 USE_TYPO_METRICS. A user who slices an axis and never opens the bit editor has expressed no opinion about style classification, so the output must still read 192. The original unchecks all six boxes on load and writes that state, producing 128 -- a font that declares itself neither Regular nor Bold nor Italic, which leaves style-linking and the RIBBI style-map ambiguous: Windows and layout engines that pick a family member by the RIBBI bits have nothing to match, and the face can fall out of its own family grouping. The original is expected to fail this case.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 192
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 6
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 7
+          },
+          {
+            "kind": "head_field",
+            "field": "macStyle",
+            "equals": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.untouched-editor-preserves-bits-in-static-instance",
+      "title": "An untouched editor preserves the REGULAR bit in a fully pinned instance",
+      "covers": [
+        "A5",
+        "E4",
+        "G1"
+      ],
+      "class": "spec",
+      "rationale": "Pinning every axis is the commonest use of the tool and produces the font most likely to be installed and style-linked, so it is exactly where losing fsSelection bit 6 REGULAR does the most damage. fontTools' instantiateVariableFont does not touch fsSelection or macStyle unless updateFontNames is passed, which the original does not pass, so any change seen here comes from the bit editor and not from instancing. The output must still be 192 with macStyle 0. The original writes 128 and is expected to fail.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "300",
+          "slnt": "0",
+          "CRSV": "0.5"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 192
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 6
+          },
+          {
+            "kind": "head_field",
+            "field": "macStyle",
+            "equals": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.untouched-editor-preserves-bits-into-woff2",
+      "title": "Bit preservation is a property of the font, not of the container",
+      "covers": [
+        "A5",
+        "E4",
+        "H1"
+      ],
+      "class": "spec",
+      "rationale": "OS/2 and head are ordinary sfnt tables that WOFF2 transports unchanged, so the container the user asks for must have no bearing on the style bits. Writing the same untouched-editor job to WOFF2 must still yield fsSelection 192 with bit 6 REGULAR set. This guards against an implementation that reconstructs OS/2 on the compression path, and it separates a container bug from a bit-editor bug when the previous two cases fail.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "format": "woff2"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "sfnt_flavor",
+            "equals": "woff2"
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 192
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 6
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.macstyle-edit-does-not-disturb-fsselection",
+      "title": "Editing head.macStyle alone leaves the untouched OS/2 checkboxes alone",
+      "covers": [
+        "A5",
+        "E3",
+        "E4"
+      ],
+      "class": "spec",
+      "rationale": "A user who ticks only the head.macStyle Italic box has said nothing about OS/2.fsSelection, so the four fsSelection checkboxes are still showing whatever the font contains and must be written back unchanged: 192, with bit 6 REGULAR intact. The original collects all six checkbox states on every slice regardless of which the user touched, so it writes fsSelection 128 here and destroys the REGULAR declaration as a side effect of a head edit; it is expected to fail. The resulting output is also inconsistent under the head specification's requirement that macStyle bits 0 and 1 agree with fsSelection bits 5 and 0 -- deliberately so, since this case is about preservation and bitflags.contradiction-macstyle-italic-without-fsselection covers the warning.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "macStyle": {
+            "1": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "head_field",
+            "field": "macStyle",
+            "equals": 2
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 192
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 6
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.contradiction-regular-and-bold",
+      "title": "REGULAR together with BOLD is written as asked",
+      "covers": [
+        "E5"
+      ],
+      "class": "judgement",
+      "rationale": "The OS/2 specification states that fsSelection bit 6 REGULAR is mutually exclusive with bits 0 ITALIC and 5 BOLD -- if bit 6 is set, bits 0 and 5 must be clear -- so 0xE0, with bits 5 and 6 both set, is non-conformant. The corpus nevertheless requires the job to succeed and the bits to be written exactly as requested (224), because the operator may be mid-way through repairing a font and a tool that silently drops half of a two-checkbox edit is worse than one that obeys. The obligation the tool does have is to say so; that assertion needs the proposed warns check and is listed against this case in _proposed_checks.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "fsSelection": {
+            "5": true,
+            "6": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 5
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 6
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 224
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.contradiction-regular-and-italic",
+      "title": "REGULAR together with ITALIC is written as asked",
+      "covers": [
+        "E5"
+      ],
+      "class": "judgement",
+      "rationale": "Bit 6 REGULAR (\"Glyphs are in the standard weight/style for the font\") and bit 0 ITALIC (\"Font contains italic or oblique glyphs\") are contradictory statements about the same glyphs, and the OS/2 specification makes them mutually exclusive. The requested value 0xC1 = 193 must still be written rather than silently sanitised, on the same reasoning as the REGULAR+BOLD case: the tool does not know which of the two the user meant, and guessing would produce a font that differs from the one asked for with no record of the substitution. A warning is the correct channel; see _proposed_checks.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "fsSelection": {
+            "0": true,
+            "6": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 0
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 6
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 193
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.contradiction-fsselection-bold-without-macstyle-bold",
+      "title": "fsSelection BOLD without macStyle BOLD is written as asked",
+      "covers": [
+        "E5"
+      ],
+      "class": "judgement",
+      "rationale": "The head specification requires macStyle bits 0 Bold and 1 Italic to be consistent with OS/2.fsSelection bits 5 BOLD and 0 ITALIC; the two fields are duplicate declarations read by different platforms, and disagreement means an application picks a different style depending on which field it trusts. Ticking fsSelection bit 5 while leaving macStyle bit 0 unticked produces exactly that split -- fsSelection 0xA0 = 160 with macStyle 0 -- and the corpus requires it to be written, with a warning, rather than auto-mirrored. Auto-mirroring would be a second silent rewrite of the user's request, of the same species as the E4 defect.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "fsSelection": {
+            "5": true,
+            "6": false
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 160
+          },
+          {
+            "kind": "head_field",
+            "field": "macStyle",
+            "equals": 0
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 5
+          },
+          {
+            "kind": "bit_clear",
+            "field": "macStyle",
+            "bit": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.contradiction-macstyle-italic-without-fsselection",
+      "title": "macStyle ITALIC without fsSelection ITALIC is written as asked",
+      "covers": [
+        "E5"
+      ],
+      "class": "judgement",
+      "rationale": "This is the mirror of the previous case, in the direction the head specification names: macStyle bit 1 Italic set while OS/2.fsSelection bit 0 ITALIC stays clear. The two fields must agree, so the output (macStyle 2, fsSelection 192 with bit 0 clear) is non-conformant and the user should be told. It is still written, because the editor's contract is that a ticked box means that bit, and because a font being repaired may legitimately pass through this state between edits.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "macStyle": {
+            "1": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "head_field",
+            "field": "macStyle",
+            "equals": 2
+          },
+          {
+            "kind": "bit_set",
+            "field": "macStyle",
+            "bit": 1
+          },
+          {
+            "kind": "bit_clear",
+            "field": "fsSelection",
+            "bit": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.contradiction-not-refused",
+      "title": "A wholly contradictory bit combination is a warning, never a refusal",
+      "covers": [
+        "E5"
+      ],
+      "class": "judgement",
+      "rationale": "Setting ITALIC, BOLD and REGULAR at once violates the OS/2 specification's mutual exclusion twice over, and is the strongest case anyone could make for refusing the job. The corpus deliberately requires success, with fsSelection 0xE1 = 225 and macStyle 3, because refusing would make the tool unable to produce a font it can read: OS/2 permits these bits to be written and real fonts in the wild already carry contradictory combinations, so a hard error would block the very repair the operator came to make. The distinguishing check -- that the tool said something -- is the proposed warns check; without it this case only establishes that the job is not refused.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "fsSelection": {
+            "0": true,
+            "5": true,
+            "6": true
+          },
+          "macStyle": {
+            "0": true,
+            "1": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 225
+          },
+          {
+            "kind": "head_field",
+            "field": "macStyle",
+            "equals": 3
+          },
+          {
+            "kind": "parses_as_font"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.consistent-bold-pair",
+      "title": "A coherent Bold declaration sets both fields and clears REGULAR",
+      "covers": [
+        "E1",
+        "E2",
+        "E3",
+        "E5"
+      ],
+      "class": "spec",
+      "rationale": "This is what a correct Bold declaration looks like under both specifications at once: fsSelection bit 5 BOLD set, bit 6 REGULAR cleared because the OS/2 specification makes it mutually exclusive with bit 5, and head.macStyle bit 0 Bold set because the head specification requires the two to agree. The result must be fsSelection 0xA0 = 160, retaining bit 7 USE_TYPO_METRICS, and macStyle 1. The case matters as the negative control for E5: a conformant combination must not draw a warning, or the warning carries no information.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "700",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "bits": {
+          "fsSelection": {
+            "5": true,
+            "6": false
+          },
+          "macStyle": {
+            "0": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 160
+          },
+          {
+            "kind": "head_field",
+            "field": "macStyle",
+            "equals": 1
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 7
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.consistent-italic-pair",
+      "title": "A coherent Italic declaration sets both fields and clears REGULAR",
+      "covers": [
+        "E1",
+        "E2",
+        "E3",
+        "E5"
+      ],
+      "class": "spec",
+      "rationale": "Pinning slnt at -15 produces an oblique instance, and fontTools sets post.italicAngle from the pinned location but never the style bits, so declaring the instance italic is the user's job. The conformant declaration is fsSelection bit 0 ITALIC set with bit 6 REGULAR cleared (mutual exclusion, OS/2) and head.macStyle bit 1 Italic set (agreement, head), giving 0x81 = 129 and 2. Like the Bold pair, this is a negative control for the E5 warning.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "400",
+          "slnt": "-15",
+          "CRSV": "1.0"
+        },
+        "bits": {
+          "fsSelection": {
+            "0": true,
+            "6": false
+          },
+          "macStyle": {
+            "1": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 129
+          },
+          {
+            "kind": "head_field",
+            "field": "macStyle",
+            "equals": 2
+          },
+          {
+            "kind": "post_field",
+            "field": "italicAngle",
+            "equals": -15.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.consistent-bold-italic-pair",
+      "title": "A coherent Bold Italic declaration sets all four style bits",
+      "covers": [
+        "E1",
+        "E2",
+        "E3",
+        "E5"
+      ],
+      "class": "spec",
+      "rationale": "Bold Italic is the fourth RIBBI style and the only one that legitimately sets two bits in each field: fsSelection bits 0 and 5, bit 6 clear, and macStyle bits 0 and 1. That is 0xA1 = 161 and 3, with bit 7 USE_TYPO_METRICS preserved. It is worth a case of its own because 0xA1 and the contradictory 0xE1 of bitflags.contradiction-not-refused differ by one bit, and an implementation that confuses mutual exclusion with a blanket ban on multiple bits would reject or mangle this conformant combination.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "700",
+          "slnt": "-15",
+          "CRSV": "1.0"
+        },
+        "bits": {
+          "fsSelection": {
+            "0": true,
+            "5": true,
+            "6": false
+          },
+          "macStyle": {
+            "0": true,
+            "1": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 161
+          },
+          {
+            "kind": "head_field",
+            "field": "macStyle",
+            "equals": 3
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 7
+          },
+          {
+            "kind": "bit_clear",
+            "field": "fsSelection",
+            "bit": 6
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.bits-survive-full-instancing",
+      "title": "Bits set by the user survive a full static instantiation",
+      "covers": [
+        "E3",
+        "G1"
+      ],
+      "class": "slice-ui",
+      "rationale": "Instancing rewrites OS/2 (usWeightClass, usWidthClass, xAvgCharWidth) and head, so the order of operations matters: the original edits the bits after instantiateVariableFont returns, and any implementation must do the same or apply the edit to the final tables. With every axis pinned the output is a static font, and the requested fsSelection 0xA0 = 160 and macStyle 1 must be what is on disk. If the bits were applied before instancing and fontTools rewrote the field, this case would catch it.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "700",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "bits": {
+          "fsSelection": {
+            "5": true,
+            "6": false
+          },
+          "macStyle": {
+            "0": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "no_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "glyph_count",
+            "equals": 3
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 160
+          },
+          {
+            "kind": "head_field",
+            "field": "macStyle",
+            "equals": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.bits-survive-partial-instancing",
+      "title": "Bits set by the user survive a restricted-range slice",
+      "covers": [
+        "E3",
+        "G2"
+      ],
+      "class": "slice-ui",
+      "rationale": "A partial instance keeps fvar and takes a different code path through fontTools than a full pin, but OS/2 and head are edited the same way afterwards, so the user's bits must come out identical. Restricting wght to 300:700 keeps all five axes and must leave fsSelection at 0x1C0 = 448 -- the fixture's bits 6 and 7 plus the requested bit 8 WWS. Asserting the axis count alongside the bits shows the two edits are independent.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "300:700"
+        },
+        "bits": {
+          "fsSelection": {
+            "8": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "has_table",
+            "table": "fvar"
+          },
+          {
+            "kind": "axis_count",
+            "equals": 5
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 448
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 8
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 6
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.slnt-pin-does-not-set-italic-bits",
+      "title": "Pinning a slant axis does not set the ITALIC bits by itself",
+      "covers": [
+        "E4",
+        "G7"
+      ],
+      "class": "fonttools",
+      "rationale": "fontTools' set_default_weight_width_slant writes post.italicAngle from the pinned slnt location -- here -15 -- but only setRibbiBits touches fsSelection and macStyle, and instantiateVariableFont calls it solely when updateFontNames is true, which Slice does not pass. Style bits are therefore the user's declaration, never an inference from geometry, which is right: an oblique instance is not automatically the family's Italic style, and the OS/2 specification ties bit 0 to a claim about the font rather than to an angle. With the editor untouched the output must keep fsSelection 192 and macStyle 0 while italicAngle becomes -15.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "slnt": "-15"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "post_field",
+            "field": "italicAngle",
+            "equals": -15.0
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 192
+          },
+          {
+            "kind": "bit_clear",
+            "field": "fsSelection",
+            "bit": 0
+          },
+          {
+            "kind": "head_field",
+            "field": "macStyle",
+            "equals": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.bold-bit-does-not-change-usweightclass",
+      "title": "Setting BOLD does not move OS/2.usWeightClass",
+      "covers": [
+        "E3",
+        "G7"
+      ],
+      "class": "spec",
+      "rationale": "OS/2.usWeightClass is a numeric weight on the 1-1000 scale and fsSelection bit 5 BOLD is a style-map flag; the OS/2 specification defines them separately and nothing in it licenses deriving one from the other. fontTools sets usWeightClass from the pinned wght location, so pinning wght at 400 must give 400 even though the user has declared the instance Bold. Conflating them would silently overwrite a value the slicing operation computed from the design space with a guess derived from a checkbox.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "fsSelection": {
+            "5": true,
+            "6": false
+          },
+          "macStyle": {
+            "0": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "usWeightClass",
+            "equals": 400
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 160
+          },
+          {
+            "kind": "head_field",
+            "field": "macStyle",
+            "equals": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.usweightclass-700-does-not-set-bold-bit",
+      "title": "A heavy pinned weight does not set the BOLD bits by itself",
+      "covers": [
+        "A5",
+        "E4",
+        "G7"
+      ],
+      "class": "fonttools",
+      "rationale": "The converse of the previous case: pinning wght at 700 makes usWeightClass 700, but fsSelection bit 5 and macStyle bit 0 are declarations about the font's role in its family and only the user can make them. Many families ship a 700 face that is the family's Bold and many ship one that is a named weight in a larger set, and the OS/2 specification gives no rule for telling them apart from the number. With the editor untouched the output must keep fsSelection 192 and macStyle 0.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "usWeightClass",
+            "equals": 700
+          },
+          {
+            "kind": "bit_clear",
+            "field": "fsSelection",
+            "bit": 5
+          },
+          {
+            "kind": "bit_clear",
+            "field": "macStyle",
+            "bit": 0
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 192
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.bold-bit-on-light-weight-is-allowed",
+      "title": "BOLD may be declared on a light instance without altering usWeightClass",
+      "covers": [
+        "E3",
+        "E5",
+        "G7"
+      ],
+      "class": "judgement",
+      "rationale": "Pinning wght at the fixture's default of 300 gives usWeightClass 300, and the user may still want that instance to be the Bold member of a two-style family -- a legitimate arrangement for a light display family, and one the OS/2 specification does not forbid, since it nowhere ties bit 5 to a usWeightClass threshold. The tool must therefore write fsSelection 0xA0 = 160 and macStyle 1 while leaving usWeightClass at 300, and must not treat the pairing as an error. This is a bound on how far consistency checking may go: it covers the relationships the specifications actually state, not plausible-looking ones.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "wght": "300"
+        },
+        "bits": {
+          "fsSelection": {
+            "5": true,
+            "6": false
+          },
+          "macStyle": {
+            "0": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "os2_field",
+            "field": "usWeightClass",
+            "equals": 300
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 160
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 5
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.italic-bit-does-not-change-italicangle",
+      "title": "Setting ITALIC does not move post.italicAngle",
+      "covers": [
+        "E3",
+        "G7"
+      ],
+      "class": "spec",
+      "rationale": "post.italicAngle is a measured angle in degrees counter-clockwise from vertical, which fontTools derives from the pinned slnt location; fsSelection bit 0 and macStyle bit 1 are style flags. Pinning slnt at 0 must leave italicAngle at 0 even when the user declares the instance italic, because an upright face declared italic is a name-and-style-map decision and inventing a slant angle for it would misreport the outlines. The same independence argument as the BOLD/usWeightClass pair, in the other table.",
+      "fixture": "recursive-vf",
+      "input": {
+        "axes": {
+          "MONO": "0",
+          "CASL": "0",
+          "wght": "400",
+          "slnt": "0",
+          "CRSV": "0.5"
+        },
+        "bits": {
+          "fsSelection": {
+            "0": true,
+            "6": false
+          },
+          "macStyle": {
+            "1": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "post_field",
+            "field": "italicAngle",
+            "equals": 0.0
+          },
+          {
+            "kind": "os2_field",
+            "field": "fsSelection",
+            "equals": 129
+          },
+          {
+            "kind": "head_field",
+            "field": "macStyle",
+            "equals": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.two-axis-set-is-absolute",
+      "title": "A ticked box means 1 regardless of what the font had",
+      "covers": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "class": "slice-ui",
+      "rationale": "The editor's contract is assignment, not toggling: a ticked box means the bit is 1 in the output whatever it was in the input. Asserting only bit_set on a second fixture, whose fsSelection this case does not depend on, separates that contract from the recursive-vf cases that hard-code 0xC0. An implementation that XORed the checkbox state against the font's value would pass some recursive-vf cases by luck and fail here.",
+      "fixture": "two-axis",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "fsSelection": {
+            "5": true,
+            "8": true
+          },
+          "macStyle": {
+            "0": true
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 5
+          },
+          {
+            "kind": "bit_set",
+            "field": "fsSelection",
+            "bit": 8
+          },
+          {
+            "kind": "bit_set",
+            "field": "macStyle",
+            "bit": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "bitflags.two-axis-clear-is-absolute",
+      "title": "An unticked box means 0 regardless of what the font had",
+      "covers": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "class": "slice-ui",
+      "rationale": "The mirror of the previous case, and the one that matters more, since clearing is how a user retracts a claim the font makes wrongly -- a Regular-marked face being sliced into a Bold, say. Every one of the six exposed bits must read 0 afterwards, on a fixture whose starting value this case does not assume. Bits the editor does not expose are out of scope here and are pinned down on recursive-vf, where their initial values are known.",
+      "fixture": "two-axis",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "bits": {
+          "fsSelection": {
+            "0": false,
+            "5": false,
+            "6": false,
+            "8": false
+          },
+          "macStyle": {
+            "0": false,
+            "1": false
+          }
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "bit_clear",
+            "field": "fsSelection",
+            "bit": 0
+          },
+          {
+            "kind": "bit_clear",
+            "field": "fsSelection",
+            "bit": 5
+          },
+          {
+            "kind": "bit_clear",
+            "field": "fsSelection",
+            "bit": 6
+          },
+          {
+            "kind": "bit_clear",
+            "field": "fsSelection",
+            "bit": 8
+          },
+          {
+            "kind": "bit_clear",
+            "field": "macStyle",
+            "bit": 0
+          },
+          {
+            "kind": "bit_clear",
+            "field": "macStyle",
+            "bit": 1
+          }
+        ]
+      }
+    }
+  ]
+}

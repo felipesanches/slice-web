@@ -101,16 +101,37 @@ program demonstrably understands what was asked and declines to say it cannot do
 
 **B10** · `fonttools` · A pin outside the axis extent is likewise not checked, and is
 clamped by fontTools.
-**`suspect`.** Asking for `wght=5000` on a 300–1000 axis silently yields 1000. Proposed
-verdict: warn or refuse. Weak `suspect` — clamping is what fontTools does deliberately,
-and a case can be made either way. Flagged for adjudication rather than assumed.
+**`suspect`.** Measured against the original on a 300/300/1000 `wght` axis:
+
+| typed | result |
+|---|---|
+| `5000` | accepted, `usWeightClass` 1000 |
+| `-9999` | accepted, `usWeightClass` 300 |
+
+Proposed verdict: warn or refuse. Weak `suspect` — clamping is what fontTools does
+deliberately, and a case can be made either way. Flagged for adjudication rather than
+assumed.
 
 **B11** · The pin parser is `float()`, which accepts `nan`, `inf`, `-inf`, `1e3` and
 leading/trailing whitespace.
-**`suspect`.** `float("nan")` succeeds, so an axis can be pinned to NaN. A NaN
-coordinate normalizes to NaN and propagates into every delta computed from it. Proposed
-verdict: reject non-finite values. Evidence: OpenType axis coordinates are `Fixed`
-(16.16) — there is no NaN or infinity in the format, so no such value can be written.
+**`suspect`.** Measured against the original, on a 300/300/1000 `wght` axis:
+
+| typed | result |
+|---|---|
+| `inf` | **accepted**, silently clamped to 1000 |
+| `-inf` | **accepted**, silently clamped to 300 |
+| `nan` | refused, but by fontTools deep inside normalization, with the message `Ooops... v=nan, triple=(300.0, 300.0, 1000.0)` |
+| `1e3` | accepted as 1000, which is correct |
+
+An earlier draft of this entry claimed a NaN would propagate into the outlines. That is
+**wrong** and the measurement above corrects it: fontTools catches NaN before it reaches
+any delta, and the output coordinates are always finite. The real defects are smaller but
+real: `inf` is not a weight, and silently reading it as "the heaviest available" invents
+an intent the user never expressed; and `Ooops...` is not an error message a user can act
+on. Proposed verdict: reject non-finite input in the editor, with a message naming the
+axis. Evidence: OpenType axis coordinates are `Fixed` (16.16), a format with no
+representation for infinity or NaN, so no such value can ever be written to a font — the
+input is meaningless rather than merely out of range.
 
 **B12** · The range parser uses `re.search`, not `re.fullmatch`.
 **`suspect`.** `xyz200:700zzz` matches, because `search` finds `200:700` anywhere in the

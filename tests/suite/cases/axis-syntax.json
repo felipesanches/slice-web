@@ -1,0 +1,708 @@
+{
+  "area": "axis-syntax",
+
+  "_proposed_checks": [
+    {
+      "name": "editor_axis_rows",
+      "form": "check kind",
+      "fields": {
+        "equals": "ordered list of row objects; each row may carry any of `tag` (string), `min`, `default`, `max` (numbers, compared numerically so 0 and 0.0 are equal), and `name` (string, the human-readable axis name the row displays as its tooltip). Fields omitted from a row object are not checked."
+      },
+      "passes_when": "the axis editor, immediately after the fixture is loaded and before any cell is edited, holds exactly these rows in this order. The min/default/max values are the three numbers the read-only column shows, and the check requires them to appear in the order min, max, default in that column's text so that the `{min} : {max} [{default}]` structure of C2 is verified without pinning number formatting.",
+      "why": "C1, C2, C3 and C4 are claims about what the axis editor displays after a font is loaded. Every check kind in the README inspects an output font, so there is currently no way to express any of them; without this kind those four claims cannot carry a case at all. Both implementations already expose the state it reads (the original's `DesignAxisModel._v_header`, `_data[row][0]` and `get_axis_name_string`)."
+    },
+    {
+      "name": "input.action",
+      "form": "input field",
+      "fields": {
+        "action": "\"slice\" (default) or \"load_only\""
+      },
+      "passes_when": "n/a — with `\"action\": \"load_only\"` the runner loads the fixture and stops, never invoking the Slice action, and `expect.outcome: \"success\"` means the load succeeded.",
+      "why": "The display claims C1-C4 are observable with every cell blank, which is exactly the state the Slice action refuses (B13). Without a way to say \"load only\", a display case would have to be written as a slice case that is expected to fail for an unrelated reason."
+    },
+    {
+      "name": "input.load_font",
+      "form": "input field",
+      "fields": {
+        "load_font": "boolean, default true"
+      },
+      "passes_when": "n/a — with `false` the runner never loads the fixture, so the Slice action runs with no font in hand.",
+      "why": "F1 is a claim about pressing Slice with no font loaded. `fixture` is a required field and the roster has no \"no font\" entry, so the no-font state cannot otherwise be expressed."
+    },
+    {
+      "name": "warns",
+      "form": "check kind",
+      "fields": {
+        "message_contains": "list of substrings, all of which must appear in a diagnostic the tool emitted, matched case-insensitively"
+      },
+      "passes_when": "the job succeeded and the tool emitted a diagnostic containing all the substrings.",
+      "why": "Not used by any case in this file, and proposed rather than assumed. `docs/original-behaviour.md` settles two suspects on \"warn, not refuse\" (B10, E5), and the expect vocabulary has only `success` (a warning would be invisible to the corpus) and `error` (which forbids an output font). If adjudication keeps clamping for B10, `axis.pin-above-axis-maximum` and `axis.pin-below-axis-minimum` become success cases with a `warns` check rather than error cases, and E5 needs it regardless."
+    }
+  ],
+
+  "cases": [
+    {
+      "id": "axis.blank-cell-leaves-axis-alone",
+      "title": "An empty cell leaves that axis untouched and variable",
+      "covers": ["B1", "B2"],
+      "class": "slice-ui",
+      "rationale": "The editor's contract is that a cell is a request, so no text is no request: the axis must survive with the extent `fvar` already declared for it. Anything else would mean the user cannot pin one axis of a five-axis font without also restating the other four, and would make an untouched editor destructive. The four untouched axes are checked for their full original extents, not merely for their presence, because an implementation that silently narrowed an axis to its default location would otherwise pass.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"MONO": "1"}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "axis_tags", "equals": ["CASL", "wght", "slnt", "CRSV"]},
+          {"kind": "axis_extent", "tag": "CASL", "min": 0, "default": 0, "max": 1},
+          {"kind": "axis_extent", "tag": "wght", "min": 300, "default": 300, "max": 1000},
+          {"kind": "axis_extent", "tag": "slnt", "min": -15, "default": 0, "max": 0},
+          {"kind": "axis_extent", "tag": "CRSV", "min": 0, "default": 0.5, "max": 1}
+        ]
+      }
+    },
+    {
+      "id": "axis.pin-plain-integer",
+      "title": "A plain integer is a pin, and the pinned axis leaves the design space",
+      "covers": ["B2", "B3", "G1"],
+      "class": "slice-ui",
+      "rationale": "A cell with no colon names a single location, and an axis at a single location is no longer a variation axis: the OpenType specification requires an `fvar` axis record to describe a range of user-space values, so an axis fixed at one value has nothing left to declare and must be removed along with the variation data indexed by it. Pinning the only axis therefore yields a static font. `usWeightClass` is checked because `varLib.set_default_weight_width_slant` derives it from the pinned `wght` location, which makes it cheap evidence that the number the parser produced was 700 and not merely some number.",
+      "fixture": "centred-default",
+      "input": {"axes": {"wght": "700"}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "no_table", "table": "fvar"},
+          {"kind": "no_table", "table": "gvar"},
+          {"kind": "os2_field", "field": "usWeightClass", "equals": 700},
+          {"kind": "outlines_match_source_at", "location": {"wght": 700}}
+        ]
+      }
+    },
+    {
+      "id": "axis.pin-decimal",
+      "title": "A decimal pin lands at the fractional location, not at a rounded one",
+      "covers": ["B2", "B3"],
+      "class": "spec",
+      "rationale": "OpenType stores axis coordinates as `Fixed` 16.16, which carries roughly four decimal digits of fraction, so 0.25 is exactly representable and there is no licence to round it to an integer. Fractional coordinates are ordinary in practice: registered axes such as `slnt` and Google Fonts registry axes such as `CRSV` are routinely used at intermediate positions, and `CRSV` here has a fractional default of 0.5 to begin with. Comparing outlines against the source drawn at CRSV 0.25 verifies the parsed value reached the instancer intact rather than merely that some pin happened.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"CRSV": "0.25"}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "axis_tags", "equals": ["MONO", "CASL", "wght", "slnt"]},
+          {"kind": "outlines_match_source_at", "location": {"MONO": 0, "CASL": 0, "wght": 300, "slnt": 0, "CRSV": 0.25}}
+        ]
+      }
+    },
+    {
+      "id": "axis.pin-negative-decimal",
+      "title": "A negative decimal pin is accepted and lands at the negative location",
+      "covers": ["B2", "B3"],
+      "class": "spec",
+      "rationale": "The OpenType axis registry defines `slnt` as degrees of counter-clockwise rotation with negative values for the usual forward lean, so negative coordinates are not an edge case on this axis but the only useful half of it. `Fixed` 16.16 is signed, so -7.5 is exactly representable. A parser that mistook the leading minus for a separator, or that dropped the sign, would still produce a plausible-looking font, so the case is checked against the source outlines at slnt -7.5 rather than against the axis list alone.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"slnt": "-7.5"}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "axis_tags", "equals": ["MONO", "CASL", "wght", "CRSV"]},
+          {"kind": "outlines_match_source_at", "location": {"MONO": 0, "CASL": 0, "wght": 300, "slnt": -7.5, "CRSV": 0.5}}
+        ]
+      }
+    },
+    {
+      "id": "axis.pin-at-axis-extremes",
+      "title": "Pins exactly at an axis minimum and maximum are valid locations",
+      "covers": ["B3", "B10"],
+      "class": "spec",
+      "rationale": "The `fvar` minValue and maxValue are inclusive bounds on the coordinates an axis may take, so the endpoints are locations the font defines and must be accepted. This case exists to fence the out-of-range rule encoded in `axis.pin-above-axis-maximum`: a bounds check written with the wrong comparison operator would reject the two most commonly requested locations in the whole design space, since \"the heaviest weight\" and \"the full slant\" are what most users of a variable font actually want to slice out.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"wght": "1000", "slnt": "-15"}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "axis_tags", "equals": ["MONO", "CASL", "CRSV"]},
+          {"kind": "os2_field", "field": "usWeightClass", "equals": 1000},
+          {"kind": "outlines_match_source_at", "location": {"MONO": 0, "CASL": 0, "wght": 1000, "slnt": -15, "CRSV": 0.5}}
+        ]
+      }
+    },
+    {
+      "id": "axis.pin-integer-with-trailing-zero",
+      "title": "\"400.0\" and \"400\" name the same location",
+      "covers": ["B3"],
+      "class": "slice-ui",
+      "rationale": "The corpus deliberately treats `\"400\"` and `\"400.0\"` as different inputs because they are different characters; this case establishes that they are nonetheless the same request. Nothing in `Fixed` 16.16 distinguishes them, and the read-only column of the editor itself displays defaults with a trailing `.0`, so a user copying the displayed value back into the edit cell is typing the form under test here. An implementation whose numeric grammar required either the presence or the absence of a fractional part would fail one of these two spellings.",
+      "fixture": "centred-default",
+      "input": {"axes": {"wght": "400.0"}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "no_table", "table": "fvar"},
+          {"kind": "os2_field", "field": "usWeightClass", "equals": 400},
+          {"kind": "outlines_match_source_at", "location": {"wght": 400}}
+        ]
+      }
+    },
+    {
+      "id": "axis.pin-surrounded-by-whitespace",
+      "title": "A pin padded with spaces is accepted as the trimmed number",
+      "covers": ["B3", "B11"],
+      "class": "slice-ui",
+      "rationale": "Leading and trailing whitespace is an artefact of typing and of pasting values out of a specimen or a spreadsheet, never a statement about the design space, so it must be trimmed rather than treated as corruption. The original already behaves this way for pins because `float()` strips surrounding whitespace, and B11 records that as a property of the parser rather than as a defect. Fixing it here as required behaviour matters because the corrected B12 rule (\"the whole cell must parse\") is otherwise easy to implement as a regex anchored on the raw cell, which would reject this input and every pasted value like it.",
+      "fixture": "centred-default",
+      "input": {"axes": {"wght": "  400  "}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "no_table", "table": "fvar"},
+          {"kind": "os2_field", "field": "usWeightClass", "equals": 400}
+        ]
+      }
+    },
+    {
+      "id": "axis.pin-scientific-notation",
+      "title": "Exponent notation is a finite number and is accepted",
+      "covers": ["B3", "B11"],
+      "class": "judgement",
+      "rationale": "B11's proposed verdict is narrow and deliberate: reject non-finite values, not reject everything `float()` happens to accept. `1e3` denotes 1000 unambiguously in every numeric grammar in common use, it is exactly representable in `Fixed` 16.16, and refusing it would buy nothing. The verified consequence is `usWeightClass` 1000, which distinguishes a correct parse from the failure mode this input actually invites, namely reading only the leading `1`. Note the deliberate asymmetry with `axis.range-scientific-notation-is-refused`: the pin grammar is `float()`, the range grammar is the B5 regular expression, and only the latter has no production for an exponent.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"wght": "1e3"}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "axis_tags", "equals": ["MONO", "CASL", "slnt", "CRSV"]},
+          {"kind": "os2_field", "field": "usWeightClass", "equals": 1000},
+          {"kind": "outlines_match_source_at", "location": {"MONO": 0, "CASL": 0, "wght": 1000, "slnt": 0, "CRSV": 0.5}}
+        ]
+      }
+    },
+    {
+      "id": "axis.pin-nan-is-refused",
+      "title": "A pin of \"nan\" is refused",
+      "covers": ["B3", "B11"],
+      "class": "spec",
+      "rationale": "OpenType axis coordinates are `Fixed` 16.16 — a scaled integer format with no bit pattern reserved for NaN — so there is no such thing as an axis pinned to NaN and no way to write the request out. Worse, the value does not stop at the coordinate: normalizing NaN yields NaN, and every delta scaled by that normalized location becomes NaN, so a single mistyped cell can poison every outline in the font while the save still appears to succeed. The original accepts this input because its pin parser is bare `float()`, and it is expected to fail this case; that is the defect B11 records. The refusal must name the axis so the user can find the cell.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"CRSV": "nan"}},
+      "expect": {"outcome": "error", "message_contains": ["CRSV", "nan"]}
+    },
+    {
+      "id": "axis.pin-inf-is-refused",
+      "title": "A pin of \"inf\" is refused",
+      "covers": ["B3", "B11"],
+      "class": "spec",
+      "rationale": "`Fixed` 16.16 spans roughly -32768 to +32767.99998 and has no encoding for infinity, so an infinite coordinate cannot be written to `fvar`, to `gvar`, or to an `avar` segment map. Whatever a downstream conversion does with it — saturate, wrap, or raise — is an accident rather than the user's request. The original accepts this input for the same reason it accepts NaN, and is expected to fail this case; B11's proposed verdict is to reject non-finite values, and infinity is the other half of that set.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"wght": "inf"}},
+      "expect": {"outcome": "error", "message_contains": ["wght", "inf"]}
+    },
+    {
+      "id": "axis.pin-negative-infinity-word-is-refused",
+      "title": "A pin of \"-Infinity\" is refused, in any spelling or case",
+      "covers": ["B3", "B11"],
+      "class": "spec",
+      "rationale": "`float()` accepts `inf`, `INF`, `Infinity` and `-Infinity` interchangeably, so an implementation that rejects only the literal three-letter lowercase spelling has closed one door of several into the same unrepresentable value. This case is not a duplicate of `axis.pin-inf-is-refused`: it pins down that the rejection is a property of the value, not a blocklisted string, and it exercises the negative side, which is the side a `slnt` user would reach for. `Fixed` 16.16 has no representation for either signed infinity.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"slnt": "-Infinity"}},
+      "expect": {"outcome": "error", "message_contains": ["slnt", "infinity"]}
+    },
+    {
+      "id": "axis.pin-underscore-separator-is-refused",
+      "title": "A Python-style digit separator is not a number",
+      "covers": ["B3", "B4"],
+      "class": "judgement",
+      "rationale": "`float(\"1_000\")` returns 1000.0 because underscores are permitted in Python numeric literals, which is an implementation detail of the language the original was written in and not a numeric syntax any user of a font tool expects or any specification recognizes. Requiring every future implementation to reproduce it would be reproducing a leak rather than a behaviour, and refusing it costs a user nothing they cannot express as `1000`. The original is expected to fail this case; the divergence is small, deliberate, and of the same character as B11's.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"wght": "1_000"}},
+      "expect": {"outcome": "error", "message_contains": ["wght", "1_000"]}
+    },
+    {
+      "id": "axis.pin-decimal-comma-is-refused",
+      "title": "A comma decimal separator is refused rather than truncated",
+      "covers": ["B3", "B4"],
+      "class": "slice-ui",
+      "rationale": "`400,5` is how a large part of the world writes four hundred and a half, and it is precisely the input a tool must not guess at: reading it as 400, as 4005, or as 400.5 are all defensible readings and all of them silently produce a font at a location the user did not verify. B4's contract — refuse the cell and name the axis — is the right answer because it puts the ambiguity back in front of the person who can resolve it. The original already refuses this, since `float()` does, and the case is here to keep a more permissive number parser from being introduced as a convenience.",
+      "fixture": "centred-default",
+      "input": {"axes": {"wght": "400,5"}},
+      "expect": {"outcome": "error", "message_contains": ["wght", "not a valid"]}
+    },
+    {
+      "id": "axis.pin-non-numeric-word-is-refused",
+      "title": "A style name typed into an axis cell is refused",
+      "covers": ["B3", "B4", "F2"],
+      "class": "slice-ui",
+      "rationale": "Axis cells take user-space coordinates, not style names: `fvar` has no mapping from the word \"bold\" to a location, and the mapping that does exist — the named-instance table — is not what this editor edits. Guessing would be actively harmful because a font's own named instances may place \"Bold\" anywhere on the axis. The message must contain the axis tag so that a user with five rows in front of them knows which cell to fix, which is the whole point of B4's wording.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"wght": "bold"}},
+      "expect": {"outcome": "error", "message_contains": ["wght", "not a valid"]}
+    },
+    {
+      "id": "axis.pin-lone-minus-sign-is-refused",
+      "title": "A lone minus sign is refused",
+      "covers": ["B3", "B4"],
+      "class": "slice-ui",
+      "rationale": "A half-typed value is the most likely thing to be sitting in a cell when a user reaches for the Slice button, and it denotes no location at all. The interesting risk is not that a tool accepts it as a number but that a lenient parser reads the sign and no digits as zero: on this fixture zero is inside the `slnt` range and is also its default, so the job would succeed and produce a font that looks entirely reasonable while ignoring what was typed. Refusing is the only reading that cannot silently be wrong.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"slnt": "-"}},
+      "expect": {"outcome": "error", "message_contains": ["slnt", "not a valid"]}
+    },
+    {
+      "id": "axis.pin-above-axis-maximum",
+      "title": "A pin above the axis maximum is refused, not clamped",
+      "covers": ["B10"],
+      "class": "judgement",
+      "rationale": "This is B10, the weak suspect, and the argument turns on an asymmetry between pins and ranges. A range is an intersection: asking for `0:2000` on a 100-900 axis describes a design space that, intersected with what the font has, is exactly the whole axis, so clamping it gives the user what they asked for and B9 rightly leaves it alone. A pin is not an intersection but an assertion that a specific location exists; `wght=1200` on a 100-900 axis names a location the font does not define, there is no reading under which the user meant 900, and clamping produces a static font whose outlines and whose `usWeightClass` both silently differ from the request. Against that stands the real counter-argument, which is that clamping is fontTools' deliberate documented policy in `AxisTriple.limitRangeAndPopulateDefaults` and that a library caller relies on it — but that policy is written for a programmatic caller, whereas an editor cell is human input and validating human input before acting on it is the editor's job. My recommendation is therefore to refuse; if adjudication prefers the softer verdict, the honest encoding is success plus the proposed `warns` check, never silent success.",
+      "fixture": "centred-default",
+      "input": {"axes": {"wght": "1200"}},
+      "expect": {"outcome": "error", "message_contains": ["wght", "1200", "axis"]}
+    },
+    {
+      "id": "axis.pin-below-axis-minimum",
+      "title": "A pin below the axis minimum is refused, not clamped",
+      "covers": ["B10"],
+      "class": "judgement",
+      "rationale": "The same adjudication as `axis.pin-above-axis-maximum`, on the low side, which is a distinct branch in any bounds check and a distinct mistake in practice: `wght` on this fixture starts at 300, and 100 is what a user types who is thinking of the CSS weight scale or of a different family in the same superfamily. Clamping turns that misunderstanding into a font pinned at 300 with `usWeightClass` 300 and no indication that the request was altered. The original does not check bounds at all and is expected to fail this case.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"wght": "100"}},
+      "expect": {"outcome": "error", "message_contains": ["wght", "100", "axis"]}
+    },
+    {
+      "id": "axis.range-basic",
+      "title": "A colon makes the cell a restricted range, and the axis survives narrowed",
+      "covers": ["B2", "B5", "G2"],
+      "class": "slice-ui",
+      "rationale": "The colon is the sole discriminator between the two things a cell can mean (B2), and a range must keep the axis in `fvar` with the requested bounds rather than pinning it. Named instances are checked to sit inside the new extent because the OpenType specification requires an `fvar` instance's coordinates to lie within each axis's declared range, so any instance the narrowing left outside would make the output non-conformant. The default is required to stay at 400: a Level 3 restriction moves the bounds and nothing else.",
+      "fixture": "centred-default",
+      "input": {"axes": {"wght": "200:700"}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "has_table", "table": "fvar"},
+          {"kind": "axis_count", "equals": 1},
+          {"kind": "axis_extent", "tag": "wght", "min": 200, "default": 400, "max": 700},
+          {"kind": "named_instances_within_extent"}
+        ]
+      }
+    },
+    {
+      "id": "axis.range-reversed-is-sorted",
+      "title": "A range typed high-to-low means the same as low-to-high",
+      "covers": ["B5", "B6"],
+      "class": "slice-ui",
+      "rationale": "A range denotes a set of coordinates, and the `fvar` axis record has one slot for the smaller bound and one for the larger, so the order in which the user typed the two numbers carries no information that the format can store. Sorting is the only reading that does not throw input away; the alternatives are refusing a request whose meaning is unambiguous, or writing minValue greater than maxValue, which is malformed. The resulting extent is required to be identical to `axis.range-basic`, which is the whole content of the claim.",
+      "fixture": "centred-default",
+      "input": {"axes": {"wght": "700:200"}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "axis_extent", "tag": "wght", "min": 200, "default": 400, "max": 700}
+        ]
+      }
+    },
+    {
+      "id": "axis.range-spaces-around-colon",
+      "title": "Spaces around the colon are permitted",
+      "covers": ["B5"],
+      "class": "slice-ui",
+      "rationale": "The B5 grammar writes the separator as `\\s*:\\s*` deliberately, and the editor's own read-only column displays extents in exactly this spaced form (`100.0 : 900.0 [400.0]`), so a user who copies what the tool showed them and edits a number is typing this input. Refusing it would mean the tool cannot read back its own display. The check is that the spacing changes nothing about the resulting extent.",
+      "fixture": "centred-default",
+      "input": {"axes": {"wght": "200 : 700"}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "axis_extent", "tag": "wght", "min": 200, "default": 400, "max": 700}
+        ]
+      }
+    },
+    {
+      "id": "axis.range-cell-padded-with-whitespace",
+      "title": "A range padded with leading and trailing whitespace is accepted",
+      "covers": ["B5", "B12"],
+      "class": "slice-ui",
+      "rationale": "This case exists to say precisely what B12's corrected rule means, because the obvious implementation of it gets this wrong. The B5 expression begins at `start` with no leading `\\s*`, so switching `re.search` for `re.fullmatch` on the raw cell would reject a leading space while still accepting a trailing one — an arbitrary distinction the user cannot see. The rule is therefore: trim the cell, then require the remainder to parse in its entirety. That also keeps the range path consistent with the pin path, which tolerates surrounding whitespace (B11) and must continue to.",
+      "fixture": "centred-default",
+      "input": {"axes": {"wght": "  200:700  "}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "axis_extent", "tag": "wght", "min": 200, "default": 400, "max": 700}
+        ]
+      }
+    },
+    {
+      "id": "axis.range-with-default-at-minimum",
+      "title": "A range is valid when the default sits on its lower bound",
+      "covers": ["B5", "B7"],
+      "class": "spec",
+      "rationale": "Recursive's `wght` has its default equal to its minimum, which is a common shape for an axis whose regular weight is its lightest (and the shape the `single-axis-min-default` fixture exists to isolate). The Level 3 requirement is that the restricted range contain the default, and containment is inclusive: the OpenType specification requires only that minValue <= defaultValue <= maxValue. A validator written with a strict comparison would reject every narrowing of an axis of this shape, which is most of what a user would want to do with this font.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"wght": "300:700"}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "axis_extent", "tag": "wght", "min": 300, "default": 300, "max": 700},
+          {"kind": "axis_count", "equals": 5}
+        ]
+      }
+    },
+    {
+      "id": "axis.range-with-default-at-maximum",
+      "title": "A range is valid when the default sits on its upper bound",
+      "covers": ["B5", "B7"],
+      "class": "spec",
+      "rationale": "Recursive's `slnt` runs -15 to 0 with the default at 0, so its default is the upper bound and its useful values are all negative — the mirror image of the previous case and a second inclusive boundary that an off-by-one validator would get wrong. Restricting it to -10:0 keeps the upright default and discards the steepest third of the slant, which is a real editorial request. Together with `axis.range-with-default-at-minimum` this fixes both ends of the inclusive containment rule.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"slnt": "-10:0"}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "axis_extent", "tag": "slnt", "min": -10, "default": 0, "max": 0},
+          {"kind": "axis_count", "equals": 5}
+        ]
+      }
+    },
+    {
+      "id": "axis.range-negative-bounds-reversed",
+      "title": "A negative range typed in reverse order is sorted correctly",
+      "covers": ["B5", "B6"],
+      "class": "slice-ui",
+      "rationale": "Sorting has to be numeric, not lexicographic and not \"first number is the minimum\": on a negative axis the user's natural reading order is often from the default towards the extreme, so `0:-10` is how someone describes discarding the steep end. A comparison done on the parsed strings, or a sort that mishandles the sign, would produce minValue 0 and maxValue -10 and an `fvar` record the OpenType specification forbids. The expected extent is identical to `axis.range-with-default-at-maximum`, which is the point.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"slnt": "0:-10"}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "axis_extent", "tag": "slnt", "min": -10, "default": 0, "max": 0}
+        ]
+      }
+    },
+    {
+      "id": "axis.range-excluding-default-is-refused",
+      "title": "A range that does not contain the axis default is refused",
+      "covers": ["B7"],
+      "class": "spec",
+      "rationale": "An `fvar` axis record must satisfy minValue <= defaultValue <= maxValue, so a range of 400:700 on an axis whose default is 300 cannot be written without also moving the default — a different and larger operation (Level 4 sub-spacing) that changes what the font renders when no variation settings are applied, and that requires renormalizing every delta and every `avar` segment about the new origin. Honouring the range while leaving the default outside it would produce a malformed font; honouring it by moving the default would silently change the font's identity. Refusing, and naming both the range and the default in the message, is the correct answer for a tool that does not implement Level 4.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"wght": "400:700"}},
+      "expect": {"outcome": "error", "message_contains": ["wght", "default"]}
+    },
+    {
+      "id": "axis.range-excluding-negative-default-is-refused",
+      "title": "The default-containment rule holds when the default is the upper bound",
+      "covers": ["B7"],
+      "class": "spec",
+      "rationale": "Asking for -15:-5 on `slnt` excludes the default of 0, and this is the shape of the request a user most plausibly makes by mistake — \"give me only the slanted part of the font\" — precisely because the upright default feels like something they are discarding rather than something the format requires them to keep. A containment check written as `min <= default <= max` handles it, but one written for axes whose default is interior, or one comparing absolute values, does not. The refusal is required for the same reason as the previous case: the output would otherwise have defaultValue outside [minValue, maxValue].",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"slnt": "-15:-5"}},
+      "expect": {"outcome": "error", "message_contains": ["slnt", "default"]}
+    },
+    {
+      "id": "axis.range-wholly-outside-extent-is-refused",
+      "title": "A range entirely outside the axis is judged as typed, not as clamped",
+      "covers": ["B7", "B9"],
+      "class": "spec",
+      "rationale": "1000:2000 on a 100-900 axis is out of range and also excludes the default, and the order of the two checks decides the outcome: validate the literal request and it is refused for excluding the default of 400, but clamp first and it collapses to 900:900, which contains no default either but looks to a naive check like a pin. The user's request must be judged as typed, because the message they receive has to describe the cell they can see. This also fixes the boundary of B9's leniency: clamping is a courtesy applied to ranges that genuinely overlap the axis, not a licence to reinterpret a request that has nothing in common with it.",
+      "fixture": "centred-default",
+      "input": {"axes": {"wght": "1000:2000"}},
+      "expect": {"outcome": "error", "message_contains": ["wght", "default"]}
+    },
+    {
+      "id": "axis.range-overshooting-extent-is-clamped",
+      "title": "A range that overshoots one end of the axis is clamped to it",
+      "covers": ["B9"],
+      "class": "fonttools",
+      "rationale": "A restriction is an intersection with what the font already has, so asking for 200:700 on an axis that starts at 300 describes exactly the design space 300:700 — the user has lost nothing and been told nothing untrue. This is `fontTools`' documented behaviour in `AxisTriple.limitRangeAndPopulateDefaults`, and unlike the pin case (B10) there is no divergence between the request and the result to warn about. Note the deliberate contrast with `axis.pin-below-axis-minimum`, which refuses the same number on the same axis: the corpus treats out-of-extent bounds as benign for ranges and as an error for pins, and the rationale there sets out why.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"wght": "200:700"}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "axis_extent", "tag": "wght", "min": 300, "default": 300, "max": 700},
+          {"kind": "named_instances_within_extent"}
+        ]
+      }
+    },
+    {
+      "id": "axis.range-equal-to-full-extent",
+      "title": "A range identical to the axis's own extent is accepted, not refused as a no-op",
+      "covers": ["B5", "B13", "F3"],
+      "class": "judgement",
+      "rationale": "The B13 refusal is worded as though it detected an unchanged design space, but what it actually tests is that at least one cell is non-empty, and that weaker test is the right one to keep. Deciding whether a request truly narrows anything would mean comparing the requested space against the font's after clamping, which would refuse `300:1000` here while accepting the equivalent `200:1000`, an inconsistency the user cannot predict. There is also legitimate work in a no-op slice, since the instancer still runs its optimizations. The obligation is only that the output remains a valid variable font with its design space intact.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"wght": "300:1000"}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "axis_count", "equals": 5},
+          {"kind": "axis_extent", "tag": "wght", "min": 300, "default": 300, "max": 1000},
+          {"kind": "parses_as_font"}
+        ]
+      }
+    },
+    {
+      "id": "axis.range-collapsed-to-a-point",
+      "title": "A range whose bounds are equal is a pin",
+      "covers": ["B5", "B6", "G2"],
+      "class": "fonttools",
+      "rationale": "A range with minimum equal to maximum admits exactly one coordinate, and an `fvar` axis that admits one coordinate is not an axis: `fontTools` recognizes this explicitly, treating a triple whose bounds coincide as a pinned location and dropping the axis from `fvar`. Writing the axis out with min = default = max would be legal but pointless and would leave `gvar` deltas for a variation that can never vary. The `slnt` default of 0 is used so that the collapsed point is a location the axis genuinely contains, keeping this case about the collapse and not about bounds.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"slnt": "0:0"}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "axis_tags", "equals": ["MONO", "CASL", "wght", "CRSV"]},
+          {"kind": "has_table", "table": "fvar"}
+        ]
+      }
+    },
+    {
+      "id": "axis.range-missing-upper-bound-is-refused",
+      "title": "A range with nothing after the colon is refused",
+      "covers": ["B5", "B4"],
+      "class": "slice-ui",
+      "rationale": "The B5 grammar requires a number on both sides of the colon, and there is no defensible completion of `400:` — reading the missing bound as the axis maximum would be inventing half the request, and reading it as equal to the start would silently turn a range into a pin. This is the state a cell is in mid-typing, so the tool must be able to say what is wrong with it rather than acting on it. The message names the axis, matching B4's contract for every other unparseable cell.",
+      "fixture": "centred-default",
+      "input": {"axes": {"wght": "400:"}},
+      "expect": {"outcome": "error", "message_contains": ["wght", "not a valid"]}
+    },
+    {
+      "id": "axis.range-missing-lower-bound-is-refused",
+      "title": "A range with nothing before the colon is refused",
+      "covers": ["B5", "B4"],
+      "class": "slice-ui",
+      "rationale": "The mirror of the previous case, and a distinct code path: with `re.search` the missing bound is a failure to match at all, whereas a hand-written splitter is likely to produce an empty first field and hand it to a number parser. Either way the answer is the same, because `:400` names no lower bound and the tool must not guess one. Keeping both halves of the grammar fixed by cases is what stops an implementation from anchoring only one end.",
+      "fixture": "centred-default",
+      "input": {"axes": {"wght": ":400"}},
+      "expect": {"outcome": "error", "message_contains": ["wght", "not a valid"]}
+    },
+    {
+      "id": "axis.range-non-numeric-bounds-are-refused",
+      "title": "Words either side of a colon are refused",
+      "covers": ["B2", "B5", "B4"],
+      "class": "slice-ui",
+      "rationale": "`min:max` is what a user types who has read the column header `Min : Max [Default]` as a template to fill in rather than as a description, so it is a realistic entry and not a contrived one. It also exercises B2's dispatch: the cell contains a colon, so it must be judged by the range grammar and refused there, rather than falling through to the pin parser and producing a message about a single numeric value that would not help. The refusal must name the axis.",
+      "fixture": "centred-default",
+      "input": {"axes": {"wght": "min:max"}},
+      "expect": {"outcome": "error", "message_contains": ["wght", "not a valid"]}
+    },
+    {
+      "id": "axis.range-embedded-in-garbage-is-refused",
+      "title": "A range buried in surrounding text is refused, not extracted",
+      "covers": ["B12"],
+      "class": "slice-ui",
+      "rationale": "This is B12. `re.search` finds the grammar anywhere in the cell, so `xyz200:700zzz` is accepted and the tool acts on a substring the user did not intend as their whole request. That is inconsistent with B4, under which any other cell the parser cannot make sense of is refused outright, and it hides exactly the typos a validator exists to catch. The corrected rule is that the trimmed cell must parse in its entirety; the original is expected to fail this case by succeeding.",
+      "fixture": "centred-default",
+      "input": {"axes": {"wght": "xyz200:700zzz"}},
+      "expect": {"outcome": "error", "message_contains": ["wght", "not a valid"]}
+    },
+    {
+      "id": "axis.range-with-trailing-words-is-refused",
+      "title": "A range followed by stray text is refused",
+      "covers": ["B12"],
+      "class": "slice-ui",
+      "rationale": "`400:700 garbage` is the shape B12 takes in practice — a note, a unit, or a fragment of a previous edit left after the numbers — and `re.search` accepts it silently. The trailing text may well be the user's own annotation contradicting the numbers, and the tool has no way to know. Requiring the whole trimmed cell to parse refuses it and asks; this is the same rule as `axis.range-embedded-in-garbage-is-refused` applied where the noise follows rather than surrounds, which is the case a fix anchored only at the start of the string would still get wrong. The original is expected to fail this case.",
+      "fixture": "centred-default",
+      "input": {"axes": {"wght": "400:700 garbage"}},
+      "expect": {"outcome": "error", "message_contains": ["wght", "not a valid"]}
+    },
+    {
+      "id": "axis.range-with-three-parts-is-refused",
+      "title": "A cell with two colons is refused rather than truncated to the first range",
+      "covers": ["B12"],
+      "class": "slice-ui",
+      "rationale": "`200:700:900` is not noise but a coherent request in another notation: it is exactly `fontTools`' own `min:default:max` triple syntax for Level 4 sub-spacing, so a user coming from `fonttools varLib.instancer` will type it. Under `re.search` the original quietly keeps `200:700` and discards the rest, delivering a font with a different default from the one requested — the same silent reinterpretation as B8, reached by a different route. Refusing is required until the syntax is actually supported; the original is expected to fail this case.",
+      "fixture": "centred-default",
+      "input": {"axes": {"wght": "200:700:900"}},
+      "expect": {"outcome": "error", "message_contains": ["wght", "not a valid"]}
+    },
+    {
+      "id": "axis.range-leading-dot-bound-is-refused",
+      "title": "A bound written with a leading decimal point is refused, never read as its digits",
+      "covers": ["B12"],
+      "class": "slice-ui",
+      "rationale": "The B5 grammar requires at least one digit before the decimal point, so `.5` is not a bound it can produce — but `re.search` skips the dot and matches `5:900`, and since 400 lies inside 5:900 the original accepts the cell and writes an axis starting at 5. The user asked for half a unit and received five. Whether the grammar ought to be extended to accept `.5` as 0.5, matching the pin parser, is a fair question and an implementation that did so would fail this case and deserve adjudication; what is not defensible is reading it as `5`. The corpus requires refusal, because the documented grammar has no production for it.",
+      "fixture": "centred-default",
+      "input": {"axes": {"wght": ".5:900"}},
+      "expect": {"outcome": "error", "message_contains": ["wght", "not a valid"]}
+    },
+    {
+      "id": "axis.range-scientific-notation-is-refused",
+      "title": "Exponent notation in a range bound is refused, not silently truncated",
+      "covers": ["B12"],
+      "class": "slice-ui",
+      "rationale": "This is the most damaging instance of B12 that the fixture admits. `300:1e3` means 300 to 1000 to anyone who writes it, but `re.search` matches `300:1`, sorts it to 1:300, finds the default of 300 inside, and accepts it; clamping then collapses the axis to 300:300 and the weight axis disappears from the font entirely. The user asked to keep the whole weight range and received a static weight, with no message. Refusing is required; extending the range grammar to accept exponents would also be acceptable and would need its own case, but silently reading `1e3` as `1` is not.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"wght": "300:1e3"}},
+      "expect": {"outcome": "error", "message_contains": ["wght", "not a valid"]}
+    },
+    {
+      "id": "axis.range-with-new-default-is-refused",
+      "title": "A trailing [default] group asking to move the default is refused, not discarded",
+      "covers": ["B8"],
+      "class": "slice-ui",
+      "rationale": "This is B8. The original parses `[700]`, understands it as a request to relocate the default, and then throws it away, returning a font whose default is still 300 with nothing said — so the program demonstrably knows what was asked and declines to admit it cannot do it. The user's request is not met and their font is not what they asked for. Moving the default is Level 4 sub-spacing, which `fontTools`' instancer has since gained support for through its `min:default:max` triple limits, so an implementation may legitimately implement it; what it may not do is accept the syntax and ignore the meaning. The original is expected to fail this case, and the message must name both the axis and the default so the user knows which part of the cell was refused.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"wght": "300:1000[700]"}},
+      "expect": {"outcome": "error", "message_contains": ["wght", "default"]}
+    },
+    {
+      "id": "axis.range-with-unchanged-default-is-honoured",
+      "title": "A [default] group naming the default the axis already has is satisfiable, and is honoured",
+      "covers": ["B8", "B5"],
+      "class": "judgement",
+      "rationale": "B8's defect is accepting a request the tool cannot satisfy; it is not the bracket syntax itself. Here the user restricts wght to 200:700 and states that the default is 400, which is what `fvar` already says, so the resulting font matches the request exactly and there is nothing left unhonoured. Refusing would be pedantry with a cost, since a user documenting the full intended triple in one cell — the natural thing to do after reading the `Min : Max [Default]` column header — would be turned away for asking for what they were already getting. An implementation that refuses every bracket group unconditionally will fail this case; that is the adjudication this case is here to force, and the deciding question is whether the output can satisfy the request as written.",
+      "fixture": "centred-default",
+      "input": {"axes": {"wght": "200:700[400]"}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "axis_extent", "tag": "wght", "min": 200, "default": 400, "max": 700}
+        ]
+      }
+    },
+    {
+      "id": "axis.mixed-pins-and-ranges",
+      "title": "Pins, ranges and blank cells combine in one job",
+      "covers": ["B1", "B2", "B5", "G2"],
+      "class": "slice-ui",
+      "rationale": "Each cell is an independent request, so a job that pins one axis, restricts another and leaves three alone must apply all three readings in the same pass and preserve `fvar` order in what survives — the OpenType specification gives axis order meaning, since `gvar`, `avar` and the instance coordinate arrays are all indexed positionally against it. This is the shape of a realistic slice and the only case here that exercises the dispatch of B2 across several rows at once, which is where a parser that keeps state between rows would go wrong. The pinned axis must be gone, the restricted axis narrowed with its default intact, and the untouched axes unchanged.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"MONO": "0", "wght": "300:700"}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "axis_tags", "equals": ["CASL", "wght", "slnt", "CRSV"]},
+          {"kind": "axis_extent", "tag": "wght", "min": 300, "default": 300, "max": 700},
+          {"kind": "axis_extent", "tag": "CRSV", "min": 0, "default": 0.5, "max": 1},
+          {"kind": "named_instances_within_extent"}
+        ]
+      }
+    },
+    {
+      "id": "slice.all-cells-blank-is-refused",
+      "title": "With every cell blank the job is refused",
+      "covers": ["B13", "F3", "B1"],
+      "class": "slice-ui",
+      "rationale": "Every blank cell means \"leave this axis alone\" (B1), so all cells blank means the user has described the font they already have. Producing a copy would be a silent no-op that a user could easily mistake for a successful slice, and the tool has enough information to say so before opening a save dialog. The refusal must explain what to do next rather than merely reporting failure, which is why the message is required to say that at least one axis must be given a location or a range.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {}},
+      "expect": {"outcome": "error", "message_contains": ["at least one", "axis"]}
+    },
+    {
+      "id": "slice.whitespace-only-cell-counts-as-blank",
+      "title": "A cell holding only spaces is treated as untouched",
+      "covers": ["B1", "B13"],
+      "class": "judgement",
+      "rationale": "A cell containing two spaces is indistinguishable on screen from an empty one, so the two must mean the same thing; a user cannot debug a message about a value they cannot see. This follows directly from the trim-then-parse rule that `axis.pin-surrounded-by-whitespace` and `axis.range-cell-padded-with-whitespace` establish — trimming this cell leaves the empty string, which is B1's \"leave the axis alone\". The original instead reaches `float(\"  \")` and refuses the job with a message quoting whitespace, so it is expected to fail this case; the divergence is small and deliberate, and the alternative reading (refuse, because stray input is worth reporting) is defensible but loses on the fact that the user cannot see what they are being told about.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"MONO": "1", "CASL": "   "}},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "axis_tags", "equals": ["CASL", "wght", "slnt", "CRSV"]},
+          {"kind": "axis_extent", "tag": "CASL", "min": 0, "default": 0, "max": 1}
+        ]
+      }
+    },
+    {
+      "id": "slice.only-whitespace-cells-is-refused-as-blank",
+      "title": "Cells holding only whitespace still count as an empty request",
+      "covers": ["B13", "F3"],
+      "class": "judgement",
+      "rationale": "The consequence of the previous case at the level of the whole job: if whitespace trims to blank, then a form containing nothing but whitespace is a blank form and must be refused with B13's message, telling the user to define an axis. The distinction matters because both implementations refuse this input and only the message separates them — the original quotes the whitespace back as an invalid axis value, which describes a problem the user cannot see, while the required message describes what is actually missing.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"wght": " ", "CRSV": "  "}},
+      "expect": {"outcome": "error", "message_contains": ["at least one", "axis"]}
+    },
+    {
+      "id": "slice.no-font-loaded-is-refused",
+      "title": "Slicing with no font loaded refuses and does nothing",
+      "covers": ["F1"],
+      "class": "slice-ui",
+      "rationale": "There is nothing to slice and, more to the point, nothing to validate the axis values against: the axis rows, their extents and their defaults all come from `fvar`, so with no font loaded even a well-formed `400` cannot be checked or applied. The tool must say what is missing and stop, and must not write a file or raise an unhandled error. The message is required to mention the font so it identifies what to do next.",
+      "fixture": "recursive-vf",
+      "input": {"load_font": false, "axes": {"wght": "400"}},
+      "expect": {"outcome": "error", "message_contains": ["font"]}
+    },
+    {
+      "id": "slice.invalid-cell-aborts-before-any-output",
+      "title": "One bad cell abandons the whole job, including the valid cells",
+      "covers": ["F2", "B4"],
+      "class": "slice-ui",
+      "rationale": "Validation covers the whole form before any work starts, so a valid `MONO` pin alongside an unparseable `CRSV` cell must produce no font at all rather than a font sliced on the cells that happened to parse. Partial application would be the worst outcome available: the user receives a file that looks like a successful slice but silently omits one of their requests. The corpus's definition of an `error` outcome already forbids a written-out font, which is exactly the property under test here; the message must name `CRSV` so the user knows which of the five rows to fix.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"MONO": "1", "CRSV": "!!"}},
+      "expect": {"outcome": "error", "message_contains": ["CRSV", "not a valid"]}
+    },
+    {
+      "id": "slice.first-invalid-cell-is-reported",
+      "title": "With several bad cells the message names at least the first one in fvar order",
+      "covers": ["F2", "B4", "C1"],
+      "class": "judgement",
+      "rationale": "When two cells are unparseable the user needs a message that corresponds to something on screen, and the rows are displayed in `fvar` order (C1), so the first offender in that order is the one they will look at first. Requiring the message to contain `wght` — the earlier of the two bad rows here — is satisfied both by a tool that reports the first error and by one that reports all of them, and excludes only a tool that picks an arbitrary row, which is the behaviour that leaves a user staring at a cell that looks fine. This is `judgement`: nothing external settles the reporting order, but it must be predictable.",
+      "fixture": "recursive-vf",
+      "input": {"axes": {"wght": "heavy", "CRSV": "curly"}},
+      "expect": {"outcome": "error", "message_contains": ["wght"]}
+    },
+    {
+      "id": "editor.rows-follow-fvar-order-and-show-extents",
+      "title": "The editor shows one row per fvar axis, in order, with that axis's extent",
+      "covers": ["C1", "C2"],
+      "class": "slice-ui",
+      "rationale": "Axis order in `fvar` is meaningful — `gvar` tuple coordinates, `avar` segment maps and instance coordinate arrays are all indexed positionally against it — so displaying the rows in that order is what lets a user check the editor against any other tool's view of the same font. The read-only column exists to state, per axis, what the font actually permits, so it must carry the `fvar` minimum, maximum and default and no derived or rounded substitute; it is the only thing telling the user which values their cell may contain. Five rows are required for this five-axis font, which also fixes that the editor's fixed five-row scaffold is replaced on load rather than padded out.",
+      "fixture": "recursive-vf",
+      "input": {"action": "load_only"},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "editor_axis_rows", "equals": [
+            {"tag": "MONO", "min": 0, "default": 0, "max": 1},
+            {"tag": "CASL", "min": 0, "default": 0, "max": 1},
+            {"tag": "wght", "min": 300, "default": 300, "max": 1000},
+            {"tag": "slnt", "min": -15, "default": 0, "max": 0},
+            {"tag": "CRSV", "min": 0, "default": 0.5, "max": 1}
+          ]}
+        ]
+      }
+    },
+    {
+      "id": "editor.axis-names-prefer-the-registries",
+      "title": "Each row is labelled with the registered or registry name for its tag",
+      "covers": ["C3", "C4"],
+      "class": "slice-ui",
+      "rationale": "A four-character tag is not self-explanatory to most users, and the two authorities that give it a name are the OpenType design-variation axis tag registry, which fixes \"Weight\" for `wght` and \"Slant\" for `slnt`, and the Google Fonts axis registry, which fixes \"Monospace\", \"Casual\" and \"Cursive\" for `MONO`, `CASL` and `CRSV`. Preferring those over the font's own `name` entry (C4) means the label is stable across every font that uses the tag, so a user reads the same word for the same axis regardless of who compiled the font — which is the entire value of a registered tag. The font's own axis name remains the fallback for tags in neither registry. Note that this fixture cannot fully separate the two sources, since Recursive's own axis names agree with the registries; a fixture whose `name` table disagrees would be needed to prove the precedence rather than the outcome.",
+      "fixture": "recursive-vf",
+      "input": {"action": "load_only"},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "editor_axis_rows", "equals": [
+            {"tag": "MONO", "name": "Monospace"},
+            {"tag": "CASL", "name": "Casual"},
+            {"tag": "wght", "name": "Weight"},
+            {"tag": "slnt", "name": "Slant"},
+            {"tag": "CRSV", "name": "Cursive"}
+          ]}
+        ]
+      }
+    },
+    {
+      "id": "editor.single-axis-font-shows-one-row",
+      "title": "A one-axis font shows exactly one row",
+      "covers": ["C1", "C2"],
+      "class": "slice-ui",
+      "rationale": "The original's model is built around a five-row scaffold that is replaced when a font loads, so the number of rows shown must come from `fvar` and not from that scaffold: a one-axis font that displayed four empty rows would invite entries against axes the font does not have. This fixture's off-centre default of 400 within 100-900 also pins down that the third number in the read-only column is the default and not, say, the midpoint of the extent, which a two-axis font with a centred default could not distinguish.",
+      "fixture": "centred-default",
+      "input": {"action": "load_only"},
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {"kind": "editor_axis_rows", "equals": [
+            {"tag": "wght", "min": 100, "default": 400, "max": 900, "name": "Weight"}
+          ]}
+        ]
+      }
+    }
+  ]
+}
