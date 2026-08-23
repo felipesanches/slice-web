@@ -51,12 +51,18 @@ pub fn apply_segment_map(value: f64, map: &[(f64, f64)]) -> f64 {
     map[map.len() - 1].1
 }
 
+/// One axis's `avar` segment map: sorted `(from, to)` pairs.
+pub type SegmentMap = Vec<(f64, f64)>;
+
+/// Every axis's segment map, plus whether the table carries `avar` 2's extra warping.
+pub type SegmentMaps = (Vec<SegmentMap>, bool);
+
 /// The `avar` segment maps, one per axis in `fvar` order.
 ///
 /// Returns `None` when the font has no usable `avar`. `avar` version 2 adds a variation
 /// store on top of the segment maps; its segment maps still apply, so they are read and
 /// the extra warping is reported to the caller rather than silently ignored.
-pub fn segment_maps(font: &FontRef) -> Option<(Vec<Vec<(f64, f64)>>, bool)> {
+pub fn segment_maps(font: &FontRef) -> Option<SegmentMaps> {
     let avar = font.avar().ok()?;
     let has_v2_extras = avar.version().major > 1;
     let mut maps = Vec::new();
@@ -64,7 +70,7 @@ pub fn segment_maps(font: &FontRef) -> Option<(Vec<Vec<(f64, f64)>>, bool)> {
         let Ok(segment_map) = segment_map else {
             return None;
         };
-        let pairs: Vec<(f64, f64)> = segment_map
+        let pairs: SegmentMap = segment_map
             .axis_value_maps()
             .iter()
             .map(|m| (m.from_coordinate().to_f64(), m.to_coordinate().to_f64()))
@@ -108,11 +114,7 @@ pub fn quantize(value: f64) -> f64 {
 ///
 /// `user` gives a value per axis, in `fvar` order; axes the caller does not care about
 /// should be given their default so they normalize to zero.
-pub fn normalize_location(
-    font: &FontRef,
-    axes: &[AxisSpec],
-    user: &[f64],
-) -> NormalizedLocation {
+pub fn normalize_location(font: &FontRef, axes: &[AxisSpec], user: &[f64]) -> NormalizedLocation {
     assert_eq!(axes.len(), user.len());
     let mut coords: Vec<f64> = axes
         .iter()

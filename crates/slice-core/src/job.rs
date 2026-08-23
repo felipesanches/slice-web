@@ -378,7 +378,10 @@ mod tests {
         let axes = result.axes().unwrap();
         assert_eq!(axes.len(), 1, "the four pinned axes should be gone");
         assert_eq!(axes[0].tag, "wght");
-        assert_eq!((axes[0].min, axes[0].default, axes[0].max), (300.0, 300.0, 700.0));
+        assert_eq!(
+            (axes[0].min, axes[0].default, axes[0].max),
+            (300.0, 300.0, 700.0)
+        );
     }
 
     #[test]
@@ -391,7 +394,10 @@ mod tests {
         let result = SliceFont::load(output.bytes).unwrap();
         let axes = result.axes().unwrap();
         assert_eq!(axes.len(), 1);
-        assert_eq!((axes[0].min, axes[0].default, axes[0].max), (300.0, 300.0, 1000.0));
+        assert_eq!(
+            (axes[0].min, axes[0].default, axes[0].max),
+            (300.0, 300.0, 1000.0)
+        );
     }
 
     #[test]

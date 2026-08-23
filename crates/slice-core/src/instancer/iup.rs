@@ -104,7 +104,7 @@ fn iup_segment(
             // everything between them takes it; if they disagree, there is no defensible
             // answer and the points stay put.
             let value = if d1 == d2 { d1 } else { 0.0 };
-            out.extend(std::iter::repeat(value).take(coords.len()));
+            out.extend(std::iter::repeat_n(value, coords.len()));
             continue;
         }
 
@@ -171,7 +171,11 @@ mod tests {
         let coords = [(0.0, 0.0), (5.0, 0.0), (10.0, 0.0)];
         let deltas = [Some((0.0, 0.0)), None, Some((10.0, 0.0))];
         let out = iup_contour(&deltas, &coords);
-        assert_eq!(out[1], (5.0, 0.0), "halfway along should take half the delta");
+        assert_eq!(
+            out[1],
+            (5.0, 0.0),
+            "halfway along should take half the delta"
+        );
     }
 
     #[test]
@@ -181,7 +185,10 @@ mod tests {
         let coords = [(0.0, 0.0), (20.0, 0.0), (10.0, 0.0)];
         let deltas = [Some((0.0, 0.0)), None, Some((4.0, 0.0))];
         let out = iup_contour(&deltas, &coords);
-        assert_eq!(out[1].0, 4.0, "x=20 is past x=10, so it clamps to that delta");
+        assert_eq!(
+            out[1].0, 4.0,
+            "x=20 is past x=10, so it clamps to that delta"
+        );
     }
 
     #[test]

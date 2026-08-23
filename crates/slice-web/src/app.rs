@@ -48,9 +48,7 @@ pub fn App() -> impl IntoView {
         spawn_local(async move {
             match files::fetch_same_origin(files::SAMPLE_PATH).await {
                 Ok(bytes) => state.load_font(files::SAMPLE_NAME.to_string(), bytes),
-                Err(message) => {
-                    state.report("The sample font could not be loaded.", Some(message))
-                }
+                Err(message) => state.report("The sample font could not be loaded.", Some(message)),
             }
         });
     });
@@ -301,7 +299,10 @@ fn perform(state: AppState) {
         Err(e) => {
             // Errors that name an axis or explain a rule read better as the summary;
             // there is no extra detail to hide behind a disclosure.
-            state.report("Font processing failed. See details below.", Some(e.to_string()));
+            state.report(
+                "Font processing failed. See details below.",
+                Some(e.to_string()),
+            );
         }
     }
 }

@@ -107,7 +107,11 @@ pub fn parse_axis_limit(input: &str, axis_tag: &str) -> Result<AxisLimit, SliceE
     }
 
     // Slice sorts the pair, so `800:400` means the same as `400:800`.
-    let (min, max) = if start <= end { (start, end) } else { (end, start) };
+    let (min, max) = if start <= end {
+        (start, end)
+    } else {
+        (end, start)
+    };
     Ok(AxisLimit::Range { min, max })
 }
 
@@ -268,12 +272,18 @@ mod tests {
 
     #[test]
     fn bare_number_pins_the_axis() {
-        assert_eq!(parse_axis_limit("400", "wght").unwrap(), AxisLimit::Pin(400.0));
+        assert_eq!(
+            parse_axis_limit("400", "wght").unwrap(),
+            AxisLimit::Pin(400.0)
+        );
         assert_eq!(
             parse_axis_limit("400.5", "wght").unwrap(),
             AxisLimit::Pin(400.5)
         );
-        assert_eq!(parse_axis_limit("-15", "slnt").unwrap(), AxisLimit::Pin(-15.0));
+        assert_eq!(
+            parse_axis_limit("-15", "slnt").unwrap(),
+            AxisLimit::Pin(-15.0)
+        );
     }
 
     #[test]
@@ -334,7 +344,10 @@ mod tests {
                 max: 700.0,
             })
             .unwrap_err();
-        assert!(matches!(err, SliceError::DefaultOutsideRange { .. }), "got {err:?}");
+        assert!(
+            matches!(err, SliceError::DefaultOutsideRange { .. }),
+            "got {err:?}"
+        );
 
         // A range that does contain it is fine.
         assert!(a

@@ -9,6 +9,9 @@ use miniz_oxide::inflate::decompress_to_vec_zlib_with_limit;
 
 use crate::SliceError;
 
+/// One table as it sits in an sfnt: its tag, its stored checksum, and its bytes.
+pub type TableSlice<'a> = ([u8; 4], u32, &'a [u8]);
+
 const WOFF_HEADER_LEN: usize = 44;
 const WOFF_ENTRY_LEN: usize = 20;
 const SFNT_HEADER_LEN: usize = 12;
@@ -166,10 +169,7 @@ pub fn encode_woff(sfnt: &[u8]) -> Result<Vec<u8>, SliceError> {
 }
 
 /// Build an sfnt from a set of tables.
-pub fn assemble_sfnt<'a>(
-    flavor: u32,
-    tables: impl Iterator<Item = ([u8; 4], u32, &'a [u8])>,
-) -> Vec<u8> {
+pub fn assemble_sfnt<'a>(flavor: u32, tables: impl Iterator<Item = TableSlice<'a>>) -> Vec<u8> {
     let tables: Vec<_> = tables.collect();
     let num_tables = tables.len();
     let (search_range, entry_selector, range_shift) = search_params(num_tables as u16);
@@ -199,7 +199,7 @@ pub fn assemble_sfnt<'a>(
 }
 
 /// Take an sfnt apart into `(tag, checksum, bytes)` triples, sorted by tag.
-pub fn split_sfnt(data: &[u8]) -> Result<(u32, Vec<([u8; 4], u32, &[u8])>), SliceError> {
+pub fn split_sfnt(data: &[u8]) -> Result<(u32, Vec<TableSlice<'_>>), SliceError> {
     if data.len() < SFNT_HEADER_LEN {
         return Err(SliceError::Read("file is too short to be a font".into()));
     }

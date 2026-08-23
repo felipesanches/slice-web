@@ -24,8 +24,8 @@
 //!   the same.
 
 use kurbo::{BezPath, CubicBez, ParamCurve, PathEl, Point, Shape};
-use read_fonts::{FontRef, TableProvider};
 use read_fonts::tables::glyf::CurvePoint;
+use read_fonts::{FontRef, TableProvider};
 use write_fonts::tables::glyf::{Contour, GlyfLocaBuilder, Glyph as WGlyph, SimpleGlyph};
 use write_fonts::types::GlyphId;
 use write_fonts::{from_obj::ToOwnedTable, FontBuilder};
@@ -532,7 +532,11 @@ fn reverse_contour(path: &BezPath) -> BezPath {
     out.move_to(last_end);
     for index in (0..points.len()).rev() {
         let (c1, c2, _) = points[index];
-        let segment_start = if index == 0 { start } else { points[index - 1].2 };
+        let segment_start = if index == 0 {
+            start
+        } else {
+            points[index - 1].2
+        };
         out.curve_to(c2, c1, segment_start);
     }
     out.close_path();
@@ -720,10 +724,7 @@ mod tests {
         let mut checked = 0;
         for i in 0..80 {
             for j in 0..80 {
-                let point = Point::new(
-                    -12.3 + i as f64 * 2.531,
-                    -9.7 + j as f64 * 2.417,
-                );
+                let point = Point::new(-12.3 + i as f64 * 2.531, -9.7 + j as f64 * 2.417);
                 checked += 1;
                 if filled(before, point) != filled(after, point) {
                     mismatches.push(point);
@@ -742,7 +743,11 @@ mod tests {
     fn union_of_overlapping_squares_covers_the_same_region() {
         let before = overlapping_squares();
         let after = union(&before);
-        assert_eq!(after.len(), 1, "two overlapping squares should merge into one");
+        assert_eq!(
+            after.len(),
+            1,
+            "two overlapping squares should merge into one"
+        );
         assert_same_filled_region(&before, &after, "overlapping squares");
     }
 
@@ -755,7 +760,10 @@ mod tests {
             !filled(&after, Point::new(50.0, 50.0)),
             "the counter was filled in: overlap removal would destroy every 'o' in the font"
         );
-        assert!(filled(&after, Point::new(10.0, 50.0)), "the ring should still be filled");
+        assert!(
+            filled(&after, Point::new(10.0, 50.0)),
+            "the ring should still be filled"
+        );
         assert_same_filled_region(&before, &after, "square with counter");
     }
 
@@ -786,17 +794,29 @@ mod tests {
         // outer-wound contours and subtracting all the inner-wound ones: that would
         // subtract the ring's hole from the letter and erase it.
         let before = vec![
-            rect(0.0, 0.0, 300.0, 300.0, true),      // depth 0: outer ring, filled
-            rect(40.0, 40.0, 260.0, 260.0, false),   // depth 1: its hole
-            rect(80.0, 80.0, 220.0, 220.0, true),    // depth 2: the letter, filled
+            rect(0.0, 0.0, 300.0, 300.0, true), // depth 0: outer ring, filled
+            rect(40.0, 40.0, 260.0, 260.0, false), // depth 1: its hole
+            rect(80.0, 80.0, 220.0, 220.0, true), // depth 2: the letter, filled
             rect(120.0, 120.0, 180.0, 180.0, false), // depth 3: the letter's counter
         ];
 
         // Sanity-check the fixture itself before trusting what it proves.
-        assert!(filled(&before, Point::new(20.0, 150.0)), "outer ring should be solid");
-        assert!(!filled(&before, Point::new(60.0, 150.0)), "the ring's hole should be empty");
-        assert!(filled(&before, Point::new(100.0, 150.0)), "the letter should be solid");
-        assert!(!filled(&before, Point::new(150.0, 150.0)), "the letter's counter should be empty");
+        assert!(
+            filled(&before, Point::new(20.0, 150.0)),
+            "outer ring should be solid"
+        );
+        assert!(
+            !filled(&before, Point::new(60.0, 150.0)),
+            "the ring's hole should be empty"
+        );
+        assert!(
+            filled(&before, Point::new(100.0, 150.0)),
+            "the letter should be solid"
+        );
+        assert!(
+            !filled(&before, Point::new(150.0, 150.0)),
+            "the letter's counter should be empty"
+        );
 
         let after = union(&before);
         assert_same_filled_region(&before, &after, "counter inside a counter");
@@ -814,8 +834,14 @@ mod tests {
 
         let after = union(&before);
         assert_same_filled_region(&before, &after, "overlapping rings");
-        assert!(!filled(&after, Point::new(40.0, 50.0)), "the left hole should survive");
-        assert!(!filled(&after, Point::new(120.0, 50.0)), "the right hole should survive");
+        assert!(
+            !filled(&after, Point::new(40.0, 50.0)),
+            "the left hole should survive"
+        );
+        assert!(
+            !filled(&after, Point::new(120.0, 50.0)),
+            "the right hole should survive"
+        );
     }
 
     #[test]

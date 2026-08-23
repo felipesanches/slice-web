@@ -304,7 +304,10 @@ pub fn rebase_tent(tent: Tent, axis_limit: AxisTriple) -> Vec<Solution> {
         (-2.0..=2.0).contains(&lower) && lower <= peak && peak <= upper && upper <= 2.0,
         "tent {tent:?} is not a sorted triple within -2..+2"
     );
-    assert!(peak != 0.0, "a tent peak of zero should never reach the solver");
+    assert!(
+        peak != 0.0,
+        "a tent peak of zero should never reach the solver"
+    );
 
     solve(tent, axis_limit)
         .into_iter()

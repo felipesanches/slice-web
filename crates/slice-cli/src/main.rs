@@ -99,7 +99,8 @@ fn main() -> ExitCode {
 }
 
 fn load(path: &PathBuf) -> Result<SliceFont, String> {
-    let bytes = std::fs::read(path).map_err(|e| format!("could not read {}: {e}", path.display()))?;
+    let bytes =
+        std::fs::read(path).map_err(|e| format!("could not read {}: {e}", path.display()))?;
     SliceFont::load(bytes).map_err(|e| e.to_string())
 }
 
@@ -118,7 +119,11 @@ fn info(path: PathBuf, all_names: bool) -> Result<(), String> {
         "  {} glyphs, {} units per em, {} outlines",
         font.glyph_count(),
         font.units_per_em(),
-        if font.is_truetype() { "TrueType" } else { "CFF" }
+        if font.is_truetype() {
+            "TrueType"
+        } else {
+            "CFF"
+        }
     );
 
     // Only the Axis Editor needs a variable font. The name records and bit flags are
@@ -161,7 +166,9 @@ fn info(path: PathBuf, all_names: bool) -> Result<(), String> {
         slice_core::BitFlags::binary(bits.fs_selection),
         describe_bits(
             bits.fs_selection,
-            slice_core::bits::OS2_FS_SELECTION.iter().map(|b| (b.offset, b.label))
+            slice_core::bits::OS2_FS_SELECTION
+                .iter()
+                .map(|b| (b.offset, b.label))
         )
     );
     println!(
@@ -169,7 +176,9 @@ fn info(path: PathBuf, all_names: bool) -> Result<(), String> {
         slice_core::BitFlags::binary(bits.mac_style),
         describe_bits(
             bits.mac_style,
-            slice_core::bits::HEAD_MAC_STYLE.iter().map(|b| (b.offset, b.label))
+            slice_core::bits::HEAD_MAC_STYLE
+                .iter()
+                .map(|b| (b.offset, b.label))
         )
     );
     for warning in bits.warnings() {
@@ -183,10 +192,7 @@ fn write_fonts_name_id(id: u16) -> write_fonts::types::NameId {
     write_fonts::types::NameId::new(id)
 }
 
-fn describe_bits<'a>(
-    value: u16,
-    definitions: impl Iterator<Item = (u8, &'a str)>,
-) -> String {
+fn describe_bits<'a>(value: u16, definitions: impl Iterator<Item = (u8, &'a str)>) -> String {
     let set: Vec<&str> = definitions
         .filter(|(offset, _)| value & (1 << offset) != 0)
         .map(|(_, label)| label)

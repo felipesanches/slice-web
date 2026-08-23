@@ -18,10 +18,10 @@
 //! `-- --nocapture` to see the largest deviation actually observed, which is the number
 //! quoted in the README.
 
+use read_fonts::TableProvider;
 use skrifa::instance::{LocationRef, Size};
 use skrifa::outline::{DrawSettings, OutlinePen};
 use skrifa::prelude::*;
-use read_fonts::TableProvider;
 use skrifa::{FontRef, MetadataProvider};
 
 use slice_core::instancer::{instantiate_static, normalize_location};
@@ -109,7 +109,11 @@ fn compare(reference: &Recorder, actual: &Recorder, what: &str) -> f32 {
     );
     let mut worst = 0.0f32;
     for (i, (r, a)) in reference.ops.iter().zip(&actual.ops).enumerate() {
-        assert_eq!(r.kind(), a.kind(), "{what}: operation {i} is a different kind");
+        assert_eq!(
+            r.kind(),
+            a.kind(),
+            "{what}: operation {i} is a different kind"
+        );
         for (rc, ac) in r.coords().iter().zip(a.coords().iter()) {
             let diff = (rc - ac).abs();
             worst = worst.max(diff);
@@ -262,7 +266,10 @@ fn advance_widths_match_skrifa_at_every_location() {
     }
 
     println!("largest advance deviation: {worst_overall} font units");
-    assert_eq!(worst_overall, 0.0, "advances are expected to agree with skrifa exactly");
+    assert_eq!(
+        worst_overall, 0.0,
+        "advances are expected to agree with skrifa exactly"
+    );
 }
 
 #[test]
@@ -278,7 +285,8 @@ fn instancing_at_the_default_preserves_the_outlines_exactly() {
         let reference = draw(&variable, gid, LocationRef::default());
         let actual = draw(&instanced, gid, LocationRef::default());
         assert_eq!(
-            reference, actual,
+            reference,
+            actual,
             "glyph {} changed when instanced at the default location",
             gid.to_u32()
         );

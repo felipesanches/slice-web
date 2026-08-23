@@ -108,14 +108,22 @@ def render(table: list[tuple]) -> str:
         "// `axis_range` is padded to five fields; upstream defaults the two",
         "// pre-normalization distances to 1 when it writes a three-field range.",
         "",
+        "/// A solver result: a multiplier, and the tent it applies over.",
+        "/// A `None` tent is the unconditional 'gain' term.",
+        "pub type Solution = (f64, Option<(f64, f64, f64)>);",
+        "",
         "/// One case: rebasing `tent` onto `axis_range` must produce `expected`.",
         "pub struct Vector {",
         "    pub tent: (f64, f64, f64),",
         "    pub axis_range: (f64, f64, f64, f64, f64),",
-        "    pub expected: &'static [(f64, Option<(f64, f64, f64)>)],",
+        "    pub expected: &'static [Solution],",
         "}",
         "",
-        f"pub const VECTORS: &[Vector] = &[",
+        # One entry per line, which rustfmt would collapse where it fits. The layout is
+        # the generator's business, and a file that cargo fmt keeps wanting to rewrite
+        # makes `cargo fmt --check` fail in CI for no good reason.
+        "#[rustfmt::skip]",
+        "pub const VECTORS: &[Vector] = &[",
     ]
 
     for tent, axis_range, expected in table:

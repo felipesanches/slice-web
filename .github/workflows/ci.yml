@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+
+      # The solver's test vectors are lifted from fontTools. If the committed copy
+      # has drifted from the pinned release, say so here rather than letting a stale
+      # file quietly reduce what is being tested.
+      - name: Solver vectors are up to date
+        run: tools/gen-solver-vectors.py --check
+
+  web:
+    name: Browser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - run: ./build.sh
+      # Ubuntu runners ship chromium, which is what the smoke test looks for.
+      - run: tools/browser-smoke.sh --no-build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: slice-web
+          path: dist/

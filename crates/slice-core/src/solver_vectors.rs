@@ -8,13 +8,18 @@
 // `axis_range` is padded to five fields; upstream defaults the two
 // pre-normalization distances to 1 when it writes a three-field range.
 
+/// A solver result: a multiplier, and the tent it applies over.
+/// A `None` tent is the unconditional 'gain' term.
+pub type Solution = (f64, Option<(f64, f64, f64)>);
+
 /// One case: rebasing `tent` onto `axis_range` must produce `expected`.
 pub struct Vector {
     pub tent: (f64, f64, f64),
     pub axis_range: (f64, f64, f64, f64, f64),
-    pub expected: &'static [(f64, Option<(f64, f64, f64)>)],
+    pub expected: &'static [Solution],
 }
 
+#[rustfmt::skip]
 pub const VECTORS: &[Vector] = &[
     Vector {
         tent: (0.0, 1.0, 1.0),

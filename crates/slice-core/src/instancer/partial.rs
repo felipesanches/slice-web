@@ -27,10 +27,10 @@ use std::collections::BTreeMap;
 
 use read_fonts::{FontRef, TableProvider};
 use write_fonts::tables::avar::{Avar, AxisValueMap, SegmentMaps};
+use write_fonts::tables::fvar::InstanceRecord;
 use write_fonts::tables::fvar::{AxisInstanceArrays, Fvar, VariationAxisRecord};
 use write_fonts::tables::glyf::{GlyfLocaBuilder, Glyph as WGlyph};
 use write_fonts::tables::gvar::{GlyphDelta, GlyphDeltas, GlyphVariations, Gvar};
-use write_fonts::tables::fvar::InstanceRecord;
 use write_fonts::tables::variations::Tent;
 use write_fonts::types::{F2Dot14, Fixed, GlyphId, Tag};
 use write_fonts::{from_obj::ToOwnedTable, FontBuilder};
@@ -96,9 +96,7 @@ pub fn plan_axes(font: &FontRef, axes: &[AxisSpec], limits: &[AxisLimit]) -> Vec
                 // `AxisSpec::validate` enforces that before anything gets here. Clamp
                 // anyway: the solver asserts on an unsorted triple, and a panic deep in
                 // the engine is a poor way to report a caller's mistake.
-                AxisLimit::Range { min, max } => {
-                    (*min, spec.default.clamp(*min, *max), *max)
-                }
+                AxisLimit::Range { min, max } => (*min, spec.default.clamp(*min, *max), *max),
             };
 
             AxisPlan {
@@ -301,11 +299,8 @@ fn read_tuples(
                 sparse[index] = Some((f64::from(delta.x_delta), f64::from(delta.y_delta)));
             }
         }
-        let deltas = super::glyphs::interpolate_missing_public(
-            &sparse,
-            &points.coords,
-            &points.end_pts,
-        );
+        let deltas =
+            super::glyphs::interpolate_missing_public(&sparse, &points.coords, &points.end_pts);
 
         out.push(TupleVar { axes, deltas });
     }
@@ -327,7 +322,9 @@ pub fn instantiate_partial(font: &FontRef, plans: &[AxisPlan]) -> Result<Vec<u8>
     let num_glyphs = font.maxp()?.num_glyphs();
 
     // Which input axes survive, and where they land in the output.
-    let kept: Vec<usize> = (0..plans.len()).filter(|i| !plans[*i].is_pinned()).collect();
+    let kept: Vec<usize> = (0..plans.len())
+        .filter(|i| !plans[*i].is_pinned())
+        .collect();
     let output_index: BTreeMap<usize, usize> = kept
         .iter()
         .enumerate()
@@ -391,9 +388,7 @@ pub fn instantiate_partial(font: &FontRef, plans: &[AxisPlan]) -> Result<Vec<u8>
                 let rounded: Vec<GlyphDelta> = var
                     .deltas
                     .iter()
-                    .map(|(x, y)| {
-                        GlyphDelta::required(ot_round(*x) as i16, ot_round(*y) as i16)
-                    })
+                    .map(|(x, y)| GlyphDelta::required(ot_round(*x) as i16, ot_round(*y) as i16))
                     .collect();
                 if rounded.iter().all(|d| d.x == 0 && d.y == 0) {
                     // A tuple that moves nothing is not worth writing.
@@ -538,9 +533,10 @@ fn build_fvar(font: &FontRef, plans: &[AxisPlan]) -> Result<Fvar, SliceError> {
         if plan.is_pinned() {
             continue;
         }
-        let record = source.axes()?.get(index).ok_or_else(|| {
-            SliceError::Read("fvar axis disappeared while instancing".into())
-        })?;
+        let record = source
+            .axes()?
+            .get(index)
+            .ok_or_else(|| SliceError::Read("fvar axis disappeared while instancing".into()))?;
         let (min, default, max) = plan.output_extent();
         axes.push(VariationAxisRecord {
             axis_tag: record.axis_tag(),
@@ -835,7 +831,11 @@ fn remap_axis_value(
             if records.is_empty() {
                 return None;
             }
-            Some(w::AxisValue::format_4(v.flags(), v.value_name_id(), records))
+            Some(w::AxisValue::format_4(
+                v.flags(),
+                v.value_name_id(),
+                records,
+            ))
         }
     }
 }

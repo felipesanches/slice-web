@@ -92,7 +92,9 @@ fn adjust_i16(field: &mut i16, delta: Option<&f64>) {
 /// `post`'s underline fields are typed as FWord rather than a bare i16.
 fn adjust_fword(field: &mut write_fonts::types::FWord, delta: Option<&f64>) {
     if let Some(d) = delta {
-        let updated = (f64::from(field.to_i16()) + d).round().clamp(-32768.0, 32767.0);
+        let updated = (f64::from(field.to_i16()) + d)
+            .round()
+            .clamp(-32768.0, 32767.0);
         *field = write_fonts::types::FWord::new(updated as i16);
     }
 }
@@ -121,8 +123,14 @@ pub fn apply_to_os2(os2: &mut Os2, adjustments: &HashMap<Tag, f64>) {
     adjust_i16(&mut os2.y_subscript_y_offset, adjustments.get(&tags::SBYO));
     adjust_i16(&mut os2.y_superscript_x_size, adjustments.get(&tags::SPXS));
     adjust_i16(&mut os2.y_superscript_y_size, adjustments.get(&tags::SPYS));
-    adjust_i16(&mut os2.y_superscript_x_offset, adjustments.get(&tags::SPXO));
-    adjust_i16(&mut os2.y_superscript_y_offset, adjustments.get(&tags::SPYO));
+    adjust_i16(
+        &mut os2.y_superscript_x_offset,
+        adjustments.get(&tags::SPXO),
+    );
+    adjust_i16(
+        &mut os2.y_superscript_y_offset,
+        adjustments.get(&tags::SPYO),
+    );
 
     // sxHeight and sCapHeight only exist from OS/2 version 2 onwards.
     if let Some(x_height) = os2.sx_height.as_mut() {

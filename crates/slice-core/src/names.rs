@@ -128,7 +128,10 @@ mod tests {
 
         // Every mandatory ID is written, even the ones left blank.
         for &id in MANDATORY_IDS {
-            assert!(writes.iter().any(|(w, _)| *w == id), "missing write for {id}");
+            assert!(
+                writes.iter().any(|(w, _)| *w == id),
+                "missing write for {id}"
+            );
         }
         assert!(writes.contains(&(16, "Typo Family".to_string())));
         // 17, 21 and 22 were never filled in, so they come out.

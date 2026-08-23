@@ -100,13 +100,9 @@ pub async fn fetch_same_origin(path: &str) -> Result<Vec<u8>, String> {
             response.status_text()
         ));
     }
-    let buffer = JsFuture::from(
-        response
-            .array_buffer()
-            .map_err(|e| describe(&e))?,
-    )
-    .await
-    .map_err(|e| describe(&e))?;
+    let buffer = JsFuture::from(response.array_buffer().map_err(|e| describe(&e))?)
+        .await
+        .map_err(|e| describe(&e))?;
     Ok(Uint8Array::new(&buffer).to_vec())
 }
 

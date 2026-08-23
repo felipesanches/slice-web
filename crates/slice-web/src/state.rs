@@ -222,7 +222,6 @@ impl AppState {
             }
         });
     }
-
 }
 
 /// Format a number for a file name: `800` rather than `800.0`, `0.5` kept as is.

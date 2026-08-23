@@ -159,8 +159,7 @@ pub fn decode_container(data: Vec<u8>) -> Result<Vec<u8>, SliceError> {
     match data.get(..4) {
         Some(b"wOFF") => crate::font::woff::decode_woff(&data),
         Some(b"wOF2") => Err(SliceError::Unsupported(
-            "WOFF2 input is not supported yet. Convert the font to TTF/OTF or WOFF first."
-                .into(),
+            "WOFF2 input is not supported yet. Convert the font to TTF/OTF or WOFF first.".into(),
         )),
         // 0x00010000 (TrueType), "true", "OTTO" (CFF), "ttcf" (collection).
         _ => Ok(data),

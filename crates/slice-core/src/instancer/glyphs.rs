@@ -194,11 +194,7 @@ pub fn read_glyph(font: &FontRef, gid: GlyphId) -> Result<GlyphPoints, SliceErro
 ///
 /// Returns zero when the tuple does not apply at all, in which case its deltas can be
 /// skipped entirely.
-pub fn tuple_scalar(
-    peak: &[f64],
-    intermediate: Option<(&[f64], &[f64])>,
-    location: &[f64],
-) -> f64 {
+pub fn tuple_scalar(peak: &[f64], intermediate: Option<(&[f64], &[f64])>, location: &[f64]) -> f64 {
     let mut scalar = 1.0;
     for (axis, &peak_value) in peak.iter().enumerate() {
         // A peak of zero means this axis does not participate in the tuple.
@@ -265,7 +261,12 @@ pub fn apply_gvar_deltas(
     let original = points.coords.clone();
 
     for tuple in data.tuples() {
-        let peak: Vec<f64> = tuple.peak().values().iter().map(|v| v.get().to_f64()).collect();
+        let peak: Vec<f64> = tuple
+            .peak()
+            .values()
+            .iter()
+            .map(|v| v.get().to_f64())
+            .collect();
         let start: Option<Vec<f64>> = tuple
             .intermediate_start()
             .map(|t| t.values().iter().map(|v| v.get().to_f64()).collect());
@@ -516,7 +517,11 @@ mod tests {
                 None => 0,
             };
             let (advance, lsb) = points.metrics(x_min);
-            assert_eq!(advance, hmtx.advance(gid).unwrap_or(0), "advance for {gid:?}");
+            assert_eq!(
+                advance,
+                hmtx.advance(gid).unwrap_or(0),
+                "advance for {gid:?}"
+            );
             assert_eq!(
                 lsb,
                 hmtx.side_bearing(gid).unwrap_or(0),

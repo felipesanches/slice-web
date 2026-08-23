@@ -252,9 +252,10 @@ fn outlines_match_skrifa_across_the_restricted_space() {
             .unwrap()
             .iter()
             .filter(|axis| {
-                !case.limits.iter().any(|(tag, limit)| {
-                    *tag == axis.tag && matches!(limit, AxisLimit::Pin(_))
-                })
+                !case
+                    .limits
+                    .iter()
+                    .any(|(tag, limit)| *tag == axis.tag && matches!(limit, AxisLimit::Pin(_)))
             })
             .map(|axis| axis.tag.clone())
             .collect();
@@ -290,7 +291,8 @@ fn outlines_match_skrifa_across_the_restricted_space() {
 
                 for (index, (r, a)) in reference.ops.iter().zip(&actual.ops).enumerate() {
                     assert_eq!(
-                        r.0, a.0,
+                        r.0,
+                        a.0,
                         "{}: at {probe:?} glyph {} operation {index} differs in kind",
                         case.name,
                         gid.to_u32()
@@ -382,7 +384,10 @@ fn a_restricted_axis_reports_its_new_extent() {
 
     assert_eq!(axes.len(), 1);
     assert_eq!(axes[0].tag, "wght");
-    assert_eq!((axes[0].min, axes[0].default, axes[0].max), (300.0, 300.0, 700.0));
+    assert_eq!(
+        (axes[0].min, axes[0].default, axes[0].max),
+        (300.0, 300.0, 700.0)
+    );
 }
 
 #[test]

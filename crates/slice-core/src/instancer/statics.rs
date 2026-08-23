@@ -65,8 +65,7 @@ pub fn instantiate_static(
 
         let phantoms = points.phantoms();
         phantom_x.push((phantoms[0].0, phantoms[1].0));
-        is_composite[gid.to_u32() as usize] =
-            matches!(points.shape, GlyphShape::Composite { .. });
+        is_composite[gid.to_u32() as usize] = matches!(points.shape, GlyphShape::Composite { .. });
 
         shapes.push(build_glyph(&points));
     }
@@ -148,11 +147,7 @@ pub fn instantiate_static(
 }
 
 /// Copy every table the builder does not already hold, skipping `skip`.
-pub fn copy_remaining_tables<'a>(
-    builder: &mut FontBuilder<'a>,
-    font: &FontRef<'a>,
-    skip: &[Tag],
-) {
+pub fn copy_remaining_tables<'a>(builder: &mut FontBuilder<'a>, font: &FontRef<'a>, skip: &[Tag]) {
     for record in font.table_directory().table_records() {
         let tag = record.tag();
         if builder.contains(tag) || skip.contains(&tag) {
