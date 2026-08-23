@@ -1,5 +1,6 @@
 //! Restricting a variable font's design space.
 
+pub mod cff2;
 pub mod feature_vars;
 pub mod glyphs;
 pub mod iup;

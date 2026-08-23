@@ -138,7 +138,7 @@ fn reverse_negate(t: Tent) -> Tent {
 /// This is `fontTools.varLib.models.supportScalar` reduced to one axis, with the
 /// OpenType conventions: a peak of zero, or a malformed or default-crossing triple, means
 /// the axis does not participate and contributes a factor of 1.
-fn support_scalar(v: f64, tent: Tent) -> f64 {
+pub(crate) fn support_scalar(v: f64, tent: Tent) -> f64 {
     let (lower, peak, upper) = tent;
     if peak == 0.0 {
         return 1.0;
