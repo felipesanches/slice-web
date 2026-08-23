@@ -173,6 +173,16 @@ fn out_hhea_with_mvar(
     Some(hhea)
 }
 
+/// Pack per-glyph metrics into an `hmtx`, shared with the partial instancer.
+pub fn build_hmtx_public(metrics: &[(u16, i16)]) -> Hmtx {
+    build_hmtx(metrics)
+}
+
+/// How many long metrics `hmtx` needs, shared with the partial instancer.
+pub fn long_metric_count_public(metrics: &[(u16, i16)]) -> usize {
+    long_metric_count(metrics)
+}
+
 /// Pack per-glyph metrics into an `hmtx`, compressing the trailing run of equal advances.
 fn build_hmtx(metrics: &[(u16, i16)]) -> Hmtx {
     let long_count = long_metric_count(metrics);

@@ -10,7 +10,7 @@ use write_fonts::{from_obj::ToOwnedTable, FontBuilder};
 use crate::axes::{AxisLimit, AxisSpec};
 use crate::bits::BitFlags;
 use crate::font::{SliceFont, WIN_ENCODING, WIN_LANGUAGE, WIN_PLATFORM};
-use crate::instancer::{instantiate_static, normalize_location};
+use crate::instancer::{instantiate_partial, instantiate_static, normalize_location, plan_axes};
 use crate::names::NameEdits;
 use crate::overlaps::{remove_overlaps, OverlapReport};
 use crate::SliceError;
@@ -170,7 +170,24 @@ impl SliceJob {
             ));
             instantiate_static(&font_ref, &location)?
         } else if validated.iter().any(|(_, l)| l.is_restriction()) {
-            return Err(SliceError::Unsupported(unsupported_partial_message(&validated)));
+            let limits: Vec<AxisLimit> = validated.iter().map(|(_, l)| *l).collect();
+            let plans = plan_axes(&font_ref, &axes, &limits);
+            notes.push(format!(
+                "Restricted design space to {}",
+                plans
+                    .iter()
+                    .map(|plan| {
+                        let (min, _, max) = plan.output_extent();
+                        if plan.is_pinned() {
+                            format!("{}={}", plan.spec.tag, min)
+                        } else {
+                            format!("{}={}:{}", plan.spec.tag, min, max)
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ));
+            instantiate_partial(&font_ref, &plans)?
         } else {
             // Nothing to do to the design space; the user only asked for overlap
             // removal or editor changes.
@@ -203,27 +220,6 @@ impl SliceJob {
             overlaps: overlap_report,
         })
     }
-}
-
-/// Explain precisely which axes are asking for something not implemented yet.
-fn unsupported_partial_message(validated: &[(&AxisSpec, AxisLimit)]) -> String {
-    let mut kept = Vec::new();
-    for (axis, limit) in validated {
-        match limit {
-            AxisLimit::Range { min, max } => {
-                kept.push(format!("{} restricted to {min}:{max}", axis.tag))
-            }
-            AxisLimit::Full => kept.push(format!("{} kept variable", axis.tag)),
-            AxisLimit::Pin(_) => {}
-        }
-    }
-    format!(
-        "This build can only produce static instances, where every axis is pinned to a \
-         single value. The request leaves {} in the output ({}). Give every axis a \
-         single value to slice this font.",
-        if kept.len() == 1 { "an axis" } else { "axes" },
-        kept.join(", ")
-    )
 }
 
 /// Rewrite the `name` table according to the Name Editor.
@@ -368,20 +364,34 @@ mod tests {
     }
 
     #[test]
-    fn a_partial_request_says_which_axes_it_cannot_handle() {
+    fn restricting_one_axis_keeps_the_font_variable() {
         let font = font();
         let mut job = pin_all(&font);
         job.limits[2] = AxisLimit::Range {
             min: 300.0,
             max: 700.0,
         };
-        let err = job.run(&font).unwrap_err();
-        let message = err.to_string();
-        assert!(message.contains("wght"), "should name the axis: {message}");
-        assert!(
-            message.contains("300") && message.contains("700"),
-            "should quote the range: {message}"
-        );
+        let output = job.run(&font).unwrap();
+
+        let result = SliceFont::load(output.bytes).unwrap();
+        assert!(result.is_variable(), "wght should survive");
+        let axes = result.axes().unwrap();
+        assert_eq!(axes.len(), 1, "the four pinned axes should be gone");
+        assert_eq!(axes[0].tag, "wght");
+        assert_eq!((axes[0].min, axes[0].default, axes[0].max), (300.0, 300.0, 700.0));
+    }
+
+    #[test]
+    fn keeping_an_axis_whole_leaves_its_extent_alone() {
+        let font = font();
+        let mut job = pin_all(&font);
+        job.limits[2] = AxisLimit::Full;
+        let output = job.run(&font).unwrap();
+
+        let result = SliceFont::load(output.bytes).unwrap();
+        let axes = result.axes().unwrap();
+        assert_eq!(axes.len(), 1);
+        assert_eq!((axes[0].min, axes[0].default, axes[0].max), (300.0, 300.0, 1000.0));
     }
 
     #[test]

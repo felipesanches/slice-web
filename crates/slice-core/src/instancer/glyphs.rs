@@ -304,6 +304,18 @@ pub fn apply_gvar_deltas(
 
 /// Fill in deltas for points the tuple did not mention.
 ///
+/// Exposed for the partial instancer, which needs the same interpolation when it reads
+/// tuples apart from the outline.
+pub fn interpolate_missing_public(
+    deltas: &[MaybeDelta],
+    coords: &[(f64, f64)],
+    end_pts: &[u16],
+) -> Vec<(f64, f64)> {
+    interpolate_missing(deltas, coords, end_pts)
+}
+
+/// Fill in deltas for points the tuple did not mention.
+///
 /// Contours are interpolated with IUP. The four phantom points are each treated as their
 /// own single-point contour, which means an unmentioned phantom point simply does not
 /// move; that is what `fontTools.varLib.iup.iup_delta` does.

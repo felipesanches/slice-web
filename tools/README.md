@@ -9,6 +9,19 @@ something that is already in the tree.
 | `gen-solver-vectors.py` | Does our sub-space solver agree with fontTools' on every case fontTools tests? |
 | `browser-smoke.sh` | Does the application start in a real browser and read a font through it? |
 
+Two more live as cargo examples next to the code they debug, rather than here:
+
+| example | question it answers |
+|---|---|
+| `crates/slice-core/examples/probe_glyph.rs` | Why did this glyph's points not land where a renderer says they should? |
+| `crates/slice-core/examples/probe_partial.rs` | What happened to this font's variation data when it was partially instanced? |
+
+Both print their reasoning rather than a verdict, and both earned their place by finding
+a real bug: `probe_glyph` found IUP interpolating against already-moved coordinates and
+normalized coordinates not being quantized to F2Dot14; `probe_partial` found gvar's entry
+array being positional, so a glyph with no variations shifted every later glyph's deltas
+onto the wrong glyph.
+
 ## `gen-solver-vectors.py`
 
 `crates/slice-core/src/solver.rs` is a hand port of
