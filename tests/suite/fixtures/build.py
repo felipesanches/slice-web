@@ -1132,6 +1132,23 @@ def build_hinted():
             raise AssertionError(f"hinted: glyph {name} has no instructions")
     if vf["maxp"].maxFunctionDefs < 1:
         raise AssertionError("hinted: maxp.maxFunctionDefs must cover the fpgm FDEF")
+
+    # `maxp.maxSizeOfInstructions` sizes the interpreter's instruction buffer and the
+    # specification requires it to cover the largest glyph program in the font. Nothing
+    # in the varLib build path computes it -- the merged font inherits the field from a
+    # master that was assembled programmatically and never compiled through `glyf` --
+    # so it arrives here as 0 in front of live programs. A fixture that ships malformed
+    # makes `static.hinting.maxp-instruction-limits-cover-the-programs` unpassable by any
+    # implementation that correctly leaves the instruction maxima alone, which is what
+    # that case's own rationale requires. Set it here rather than in the case.
+    longest = max(
+        (len(g.program.getBytecode()) for g in vf["glyf"].glyphs.values()
+         if hasattr(g, "program")),
+        default=0,
+    )
+    vf["maxp"].maxSizeOfInstructions = longest
+    if longest < 1:
+        raise AssertionError("hinted: expected at least one glyph program")
     return vf
 
 

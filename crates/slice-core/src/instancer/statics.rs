@@ -157,6 +157,18 @@ pub fn instantiate_static(
             out.add_table(&hhea)
                 .map_err(|e| SliceError::Write(e.to_string()))?;
         }
+
+        // `post` carries the underline position and thickness, which MVAR varies through
+        // the `undo` and `unds` tags. The partial instancer has always baked these in;
+        // the static path did not, so a pinned instance kept the default master's
+        // underline while its ascender and x-height moved. `owned_post` rather than a
+        // plain `to_owned_table` because a version 2.0 `post` with no extra names has to
+        // be repaired before write-fonts will accept it.
+        if let Some(mut post) = crate::finalize::owned_post(font) {
+            mvar::apply_to_post(&mut post, &adjustments);
+            out.add_table(&post)
+                .map_err(|e| SliceError::Write(e.to_string()))?;
+        }
     }
 
     // STAT survives, with the axis values the pinned location can no longer reach
