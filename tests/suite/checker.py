@@ -907,6 +907,14 @@ class Checker:
                 if "equals" in spec:
                     return n == spec["equals"], f"{spec['feature']} runs {n} lookups"
                 return n >= spec["min"], f"{spec['feature']} runs {n} lookups"
+        # A feature that is not in the list runs no lookups, so a case asking for zero is
+        # satisfied by its absence. Requiring the record to be present *and* empty would
+        # be a stricter claim than any of these cases makes, and a wrong one: fontTools
+        # deletes a feature record whose lookups have all been resolved away, so demanding
+        # an empty record would fail the reference implementation.
+        wanted = spec.get("equals", spec.get("min"))
+        if wanted == 0:
+            return True, f"no {spec['feature']} feature, so it runs no lookups"
         return False, f"no {spec['feature']} feature"
 
     def no_feature_variations(self, spec):
