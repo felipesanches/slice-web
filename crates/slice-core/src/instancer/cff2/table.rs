@@ -497,6 +497,42 @@ mod tests {
     }
 
     #[test]
+    fn a_truncated_table_is_an_error_rather_than_a_panic() {
+        // Every prefix of a valid table is a malformed one. None of them may panic:
+        // these bytes come from a file the user chose, and a crash in a browser tab is
+        // a worse answer than a message.
+        let builder = Cff2Builder {
+            charstrings: vec![vec![139, 22], vec![140, 22]],
+            var_store: Some(vec![0u8; 12]),
+            font_dicts: vec![FontDictBuilder {
+                private: vec![0x8b, 20],
+                local_subrs: vec![vec![139, 11]],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let whole = builder.build().unwrap();
+        for length in 0..whole.len() {
+            let truncated = &whole[..length];
+            // Reading is exercised through the pieces that take raw bytes; the table
+            // reader itself needs a FontRef, which a bare table cannot provide.
+            if let Ok(cff2) =
+                read_fonts::tables::cff2::Cff2::read(read_fonts::FontData::new(truncated))
+            {
+                let _ = parse_dict(cff2.top_dict_data());
+                let _ = index_items(truncated, 0);
+            }
+        }
+    }
+
+    #[test]
+    fn an_index_offset_past_the_end_is_an_error() {
+        assert!(index_items(&[0, 0, 0, 1, 1, 1], 999).is_err());
+        // A count that claims more entries than the offsets can describe.
+        assert!(index_items(&[0, 0, 0xff, 0xff, 1, 1], 0).is_err());
+    }
+
+    #[test]
     fn local_subroutines_are_found_through_the_private_dict() {
         let builder = Cff2Builder {
             charstrings: vec![vec![139, 22]],
