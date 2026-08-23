@@ -14,3 +14,4 @@ path = "src/main.rs"
 [dependencies]
 slice-core = { path = "../slice-core" }
 clap = { version = "4", features = ["derive"] }
+write-fonts.workspace = true
