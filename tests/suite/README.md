@@ -213,6 +213,38 @@ tests/suite/run.py --json report.json  # machine-readable
 
 Exit status is 0 when every case that is expected to pass, passes.
 
+`tests/suite/gen-docs.py` regenerates `docs/test-suite.md`, which describes every case in
+plain English; `--check` fails if the committed copy is stale, and CI runs it.
+
+## Probes
+
+Adjudicating a disagreement needs a measurement, not a reading of the source. Two scripts
+produce them, and between them they are where every number quoted in
+`docs/adjudication.md` and in the commit messages came from.
+
+| script | question it answers |
+|---|---|
+| `probe-original.py` | When the corpus and the original disagree, what does the original actually do — refuse, accept, or accept and quietly produce something else? |
+| `probe-fonttools.py` | What does fontTools read an axis limit as, what does its instancer produce, and what is really stored in a font's `glyf` and `maxp`? |
+
+```sh
+# what the original accepts in one axis cell, and what it does with it
+tests/suite/probe-original.py axis wght -- 400 inf nan 1e3 '300:700[500]'
+
+# what a slice does to a font's metadata and names, both programs side by side.
+# --enrich adds nameIDs 16/17/21/22 first, without which their loss is invisible
+tests/suite/probe-original.py --enrich --both roundtrip --axis wght=400
+
+# what the reference implementation reads a limit as
+tests/suite/probe-fonttools.py limits 'wght=300:1e3' 'wght=.5:900'
+
+# which tables survive a job, and which container comes out
+tests/suite/probe-fonttools.py instance tests/suite/fixtures/out/cff2-vf.otf wght=700
+
+# per-glyph bounding boxes, composite-ness, and whether maxp covers the programs
+tests/suite/probe-fonttools.py glyf tests/suite/fixtures/out/composites.ttf
+```
+
 ## The rule this corpus is under
 
 A case that the original passes, this implementation must also pass. A case that the
