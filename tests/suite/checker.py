@@ -200,6 +200,7 @@ def _compare_outlines(reference, actual, tolerance: float) -> str | None:
 class Checker:
     def __init__(self, output_path: str, source_path: str, peers: dict | None = None):
         self.font = ttLib.TTFont(output_path)
+        self.output_path = output_path
         self.source_path = source_path
         # Outputs of other cases in the same run, by case id. Round-tripping is an
         # equality between two *outputs*, and checking each against the source
@@ -793,22 +794,52 @@ class Checker:
                 return False, f"at {location}: {detail}"
         return True, f"{len(spec['locations'])} locations agree"
 
+    def _hmtx_at(self, font: ttLib.TTFont, location: dict) -> dict:
+        """Advance widths as they would be at `location`, after instancing and compiling.
+
+        Both sides go through this. An output that is still variable holds the *default*
+        master's advances in its `hmtx`, and the variation lives in `HVAR` or in `gvar`'s
+        phantom points; reading `hmtx` straight out of it would compare a default width
+        against a reference pinned somewhere else and call the difference a defect.
+        """
+        from fontTools.varLib.instancer import instantiateVariableFont
+
+        wanted = self._location_for(font, location)
+        if wanted and "fvar" in font:
+            instantiateVariableFont(font, wanted, inplace=True)
+            buffer = io.BytesIO()
+            font.save(buffer)
+            buffer.seek(0)
+            font = ttLib.TTFont(buffer)
+        return {name: font["hmtx"][name][0] for name in font.getGlyphOrder()}
+
     def advances_match_source_at(self, spec):
         tolerance = float(spec.get("tolerance", 1.0))
         location = spec.get("location", {})
-        from fontTools.varLib.instancer import instantiateVariableFont
-        reference = ttLib.TTFont(self.source_path)
-        pinned = self._location_for(reference, location)
-        if pinned and "fvar" in reference:
-            instantiateVariableFont(reference, pinned, inplace=True)
-        for name in reference.getGlyphOrder():
-            if name not in self.font.getGlyphOrder():
+        reference = self._hmtx_at(ttLib.TTFont(self.source_path), location)
+        actual = self._hmtx_at(ttLib.TTFont(self.output_path), location)
+        for name, want in reference.items():
+            if name not in actual:
                 return False, f"glyph {name} missing"
-            want = reference["hmtx"][name][0]
-            got = self.font["hmtx"][name][0]
-            if abs(want - got) > tolerance:
-                return False, f"glyph {name}: advance {want} vs {got}"
-        return True, "advances agree"
+            if abs(want - actual[name]) > tolerance:
+                return False, f"glyph {name}: advance {want} vs {actual[name]}"
+        return True, f"{len(reference)} advances agree"
+
+    def advances_match_source_across(self, spec):
+        """The same, at several locations.
+
+        The point of sampling more than one is that a font whose advance variation has
+        been dropped still has the right widths at whichever location happens to be its
+        default. Only an interior or far-end sample can tell "the widths still vary" from
+        "the widths are frozen at the master they were built from".
+        """
+        tolerance = float(spec.get("tolerance", 1.0))
+        for location in spec["locations"]:
+            sub = {"location": location, "tolerance": tolerance}
+            ok, detail = self.advances_match_source_at(sub)
+            if not ok:
+                return False, f"at {location}: {detail}"
+        return True, f"{len(spec['locations'])} locations agree"
 
     def filled_region_matches(self, spec):
         """The set of points inside each glyph must be unchanged.

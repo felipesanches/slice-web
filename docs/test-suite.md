@@ -33,11 +33,11 @@ Every case is labelled with where its authority comes from:
 | label | meaning | cases |
 |---|---|---|
 | `spec` | the OpenType specification requires it | 86 |
-| `fonttools` | inherited from fontTools, which the original delegates to | 102 |
+| `fonttools` | inherited from fontTools, which the original delegates to | 103 |
 | `slice-ui` | the application's own contract | 74 |
 | `judgement` | a defensible design choice with no external authority | 34 |
 
-There are **296 cases** in total, across 6 areas.
+There are **297 cases** in total, across 6 areas.
 17 of them require removing overlaps, which the original never
 had; it is expected to fail those, and that is not counted against it.
 
@@ -47,7 +47,7 @@ had; it is expected to fail those, and that is not counted against it.
 - [bitflags](#bitflags) — 37 cases
 - [names](#names) — 45 cases
 - [outlines-containers](#outlines-containers) — 57 cases
-- [partial-instancing](#partial-instancing) — 55 cases
+- [partial-instancing](#partial-instancing) — 56 cases
 - [static-instancing](#static-instancing) — 50 cases
 
 ## axis-syntax
@@ -1608,6 +1608,14 @@ Narrowing the design space while the font stays variable — fewer axes, or the 
 
 Covers claims: B1, B2, B3, B5, B6, B7, B9, C1, G1, G10, G13, G2, G3, G4, G5, G6, G8.
 
+### `partial.advances-still-vary-across-a-restricted-range`
+
+**Advance widths still vary across a narrowed axis, not frozen at the default**
+
+A variable font's `hmtx` holds only the default master's advances; the variation lives in `HVAR`, or for a `glyf` font in the phantom points `gvar` carries at the end of every glyph. An implementation that narrows an axis and drops one of those without rescaling the other produces a font that still looks right at its default location and has frozen widths everywhere else -- text set at any other weight or width then mis-spaces, with outlines that are perfectly correct. Nothing else in the corpus can see that: every other advance check samples a single location, and a frozen font passes at whichever location happens to be its default. `two-axis` is the fixture because its masters really do differ in advance -- `H` runs 372 at wdth=50, 600 at 100 and 960 at 200 -- so the three samples here separate a font whose widths still interpolate from one whose widths are constant.
+
+<sub>covers G2, G13 · authority: `fonttools` · fixture: `two-axis`</sub>
+
 ### `partial.avar-renormalized-across-restricted-range`
 
 **avar is renormalized onto the narrowed extent, so weights still land where they did**
@@ -2513,7 +2521,7 @@ that a reimplementation knows they exist, not because the corpus checks them.
 | F2 | 3 | Axis entries are validated before the save dialog opens; a parse |
 | F3 | 3 | The job is refused if it does not narrow the design space (B13) |
 | G1 | 26 | Pinning every axis yields a static font: no `fvar`, no `gvar`, no |
-| G2 | 39 | Pinning some axes and restricting others yields a variable font |
+| G2 | 40 | Pinning some axes and restricting others yields a variable font |
 | G3 | 10 | `avar` segment maps are renormalized onto the new extents |
 | G4 | 12 | Named instances that fall outside the new design space are dropped |
 | G5 | 15 | `STAT` is kept; its axis values outside the new limits are |
@@ -2524,7 +2532,7 @@ that a reimplementation knows they exist, not because the corpus checks them.
 | G10 | 24 | Name records that existed only to name axes and instances the |
 | G11 | 1 | `DSIG` is deleted, because it signs bytes that no longer exist |
 | G12 | 4 | At the default overlap mode (`KEEP_AND_SET_FLAGS`), a static |
-| G13 | 40 | Outlines at the requested location match what a renderer produces |
+| G13 | 41 | Outlines at the requested location match what a renderer produces |
 | G14 | 20 | original never removes overlaps. `instantiateVariableFont` accepts |
 | H1 | 21 | output container is the **input's** container, whatever the user names the |
 | H2 | 1 | WOFF output is compressed with zopfli, because the worker sets |

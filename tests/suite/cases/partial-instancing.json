@@ -2521,6 +2521,55 @@
           }
         ]
       }
+    },
+    {
+      "id": "partial.advances-still-vary-across-a-restricted-range",
+      "title": "Advance widths still vary across a narrowed axis, not frozen at the default",
+      "covers": [
+        "G2",
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "A variable font's `hmtx` holds only the default master's advances; the variation lives in `HVAR`, or for a `glyf` font in the phantom points `gvar` carries at the end of every glyph. An implementation that narrows an axis and drops one of those without rescaling the other produces a font that still looks right at its default location and has frozen widths everywhere else -- text set at any other weight or width then mis-spaces, with outlines that are perfectly correct. Nothing else in the corpus can see that: every other advance check samples a single location, and a frozen font passes at whichever location happens to be its default. `two-axis` is the fixture because its masters really do differ in advance -- `H` runs 372 at wdth=50, 600 at 100 and 960 at 200 -- so the three samples here separate a font whose widths still interpolate from one whose widths are constant.",
+      "fixture": "two-axis",
+      "input": {
+        "axes": {
+          "wdth": "100:200",
+          "wght": "400"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "wdth"
+            ]
+          },
+          {
+            "kind": "advances_match_source_across",
+            "locations": [
+              {
+                "wdth": 100,
+                "wght": 400
+              },
+              {
+                "wdth": 150,
+                "wght": 400
+              },
+              {
+                "wdth": 200,
+                "wght": 400
+              }
+            ],
+            "tolerance": 1.0
+          },
+          {
+            "kind": "hhea_matches_hmtx"
+          }
+        ]
+      }
     }
   ]
 }

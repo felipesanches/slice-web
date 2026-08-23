@@ -228,6 +228,7 @@ produce them, and between them they are where every number quoted in
 | `probe-fonttools.py` | What does fontTools read an axis limit as, what does its instancer produce, and what is really stored in a font's `glyf` and `maxp`? |
 | `probes/probe-output-container.py` | Does the original choose its output container from the extension the user types, as H1 claimed? (No — it uses the input's.) |
 | `probes/probe-outline-tolerance.py` | How far can a saved static instance's coordinates be from what a variation-aware renderer draws at the same location? |
+| `probes/probe-advance-freeze.py` | Would `partial.advances-still-vary-across-a-restricted-range` actually catch the bug it exists to catch? Builds the defect and checks the case fails on it. |
 
 ```sh
 # what the original accepts in one axis cell, and what it does with it
@@ -251,6 +252,9 @@ tests/suite/probes/probe-output-container.py
 
 # the worst coordinate disagreement between a saved instance and an interpolation
 tests/suite/probes/probe-outline-tolerance.py
+
+# build the bug a case is meant to catch, and check the case catches it
+tests/suite/probes/probe-advance-freeze.py
 ```
 
 The last two take a path argument but default to the committed test fonts, so the commands
