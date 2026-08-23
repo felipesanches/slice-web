@@ -28,6 +28,7 @@ pub use axes::{AxisLimit, AxisSpec};
 pub use bits::BitFlags;
 pub use font::SliceFont;
 pub use names::NameEdits;
+pub use overlaps::{remove_overlaps, OverlapReport};
 
 use thiserror::Error;
 
