@@ -10,6 +10,7 @@ something that is already in the tree.
 | `browser-smoke.sh` | Does the application start in a real browser and read a font through it? |
 | `browser-slice-test.py` | If someone fills in the editors and presses Slice, do they get the font they asked for? |
 | `compare-with-fonttools.py` | Does slicing a font here give the same font the original Slice would have given? |
+| `woff2-decoder-eval/` | Which pure-Rust WOFF2 decoder reconstructs an sfnt most faithfully, and which ones still build? (a cargo crate, not a script; see its own README) |
 
 Two more live as cargo examples next to the code they debug, rather than here:
 

@@ -190,7 +190,7 @@ impl AppState {
             let entry = text.get(index).map(String::as_str).unwrap_or("");
             match parse_axis_limit(entry, &axis.tag) {
                 Ok(AxisLimit::Pin(v)) => parts.push(format!("{}{}", axis.tag, trim_number(v))),
-                Ok(AxisLimit::Range { min, max }) => parts.push(format!(
+                Ok(AxisLimit::Range { min, max, .. }) => parts.push(format!(
                     "{}{}-{}",
                     axis.tag,
                     trim_number(min),

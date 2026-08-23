@@ -228,8 +228,14 @@ has them.
 
 - **CFF outlines.** TrueType (`glyf`) only. A `CFF`/`CFF2` font is refused rather than
   mangled.
-- **WOFF2.** Reading and writing WOFF works; WOFF2 needs the glyf transform on top of
-  brotli and is not implemented. WOFF2 input is refused with a message saying so.
+- **The WOFF2 `glyf` transform, when *writing*.** Reading WOFF2 is complete, transformed
+  `glyf`/`loca`/`hmtx` included. Writing it uses the null transform (transformVersion 3)
+  that the specification provides for exactly this: the output is a conformant WOFF2 that
+  every browser and fontTools reads, but on a `glyf`-heavy font it lands about 19% larger
+  than what fontTools or `woff2_compress` would emit, because the outlines are
+  brotli-compressed as they stand rather than re-encoded into the transform's streams.
+  (On a small variable subset, where `gvar` and the layout tables dominate, it is
+  actually a shade smaller.) See `crates/slice-core/src/font/woff2.rs` for the numbers.
 - **Variable positioning.** A font with a `GDEF` item variation store — variable kerning
   and anchors — is refused for *partial* instancing, because leaving that data keeps
   regions describing an axis space that no longer exists, and removing it dangles the

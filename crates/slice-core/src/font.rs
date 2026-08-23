@@ -158,15 +158,14 @@ impl SliceFont {
 pub fn decode_container(data: Vec<u8>) -> Result<Vec<u8>, SliceError> {
     match data.get(..4) {
         Some(b"wOFF") => crate::font::woff::decode_woff(&data),
-        Some(b"wOF2") => Err(SliceError::Unsupported(
-            "WOFF2 input is not supported yet. Convert the font to TTF/OTF or WOFF first.".into(),
-        )),
+        Some(b"wOF2") => crate::font::woff2::decode_woff2(&data),
         // 0x00010000 (TrueType), "true", "OTTO" (CFF), "ttcf" (collection).
         _ => Ok(data),
     }
 }
 
 pub mod woff;
+pub mod woff2;
 
 #[cfg(test)]
 mod tests {
@@ -228,6 +227,19 @@ mod tests {
             "WOFF and TTF inputs should describe the same design space"
         );
         assert_eq!(ttf.glyph_count(), woff.glyph_count());
+    }
+
+    #[test]
+    fn woff2_input_is_unwrapped_to_the_same_font() {
+        let ttf = recursive();
+        let woff2 = SliceFont::load(crate::testdata::recursive_vf_woff2().to_vec()).unwrap();
+        assert_eq!(
+            ttf.axes().unwrap(),
+            woff2.axes().unwrap(),
+            "WOFF2 and TTF inputs should describe the same design space"
+        );
+        assert_eq!(ttf.glyph_count(), woff2.glyph_count());
+        assert_eq!(ttf.family_name(), woff2.family_name());
     }
 
     #[test]

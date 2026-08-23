@@ -16,6 +16,8 @@ flo_curves.workspace = true
 thiserror.workspace = true
 log.workspace = true
 miniz_oxide = "0.8"
+wuff.workspace = true
+brotli.workspace = true
 
 [features]
 # Embeds the fonts in `testdata/` into the library, for tests and the CLI harnesses.

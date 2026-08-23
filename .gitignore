@@ -1,7 +1,12 @@
 /target
+/tools/woff2-decoder-eval/target
 /dist
 **/*.rs.bk
 Cargo.lock.orig
 .DS_Store
 /.fonttools-venv
 /.suite-venv
+
+# Python bytecode from the conformance suite
+__pycache__/
+*.pyc

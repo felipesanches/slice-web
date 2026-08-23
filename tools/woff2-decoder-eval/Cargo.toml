@@ -1,0 +1,17 @@
+# Deliberately NOT a member of the workspace: it exists to build three WOFF2 decoder
+# crates that slice-core does not depend on (one of which does not compile at all), and
+# dragging those into the workspace lockfile would be the opposite of the point.
+[package]
+name = "woff2-decoder-eval"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+# `woff2` 0.3.0 is absent on purpose: see the README. Uncomment to watch it fail.
+# woff2 = "0.3.0"
+woff2-patched = "0.4.0"
+woff2-no-std = { version = "0.3.4", features = ["std"] }
+wuff = { version = "0.2.8", default-features = false, features = ["brotli"] }

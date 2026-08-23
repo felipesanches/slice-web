@@ -238,6 +238,7 @@ fn OutlineOptions(state: AppState) -> impl IntoView {
                         .format
                         .set(match select.value().as_str() {
                             "woff" => OutputFormat::Woff,
+                            "woff2" => OutputFormat::Woff2,
                             _ => OutputFormat::Sfnt,
                         });
                 }>
@@ -246,6 +247,12 @@ fn OutlineOptions(state: AppState) -> impl IntoView {
                     </option>
                     <option value="woff" selected=move || state.format.get() == OutputFormat::Woff>
                         "WOFF (.woff)"
+                    </option>
+                    <option
+                        value="woff2"
+                        selected=move || state.format.get() == OutputFormat::Woff2
+                    >
+                        "WOFF2 (.woff2)"
                     </option>
                 </select>
             </label>

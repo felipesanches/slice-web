@@ -75,7 +75,8 @@ fn describe(value: &JsValue) -> String {
 }
 
 /// The file extensions the open dialog should offer.
-pub const ACCEPTED_EXTENSIONS: &str = ".ttf,.otf,.woff,font/ttf,font/otf,font/woff";
+pub const ACCEPTED_EXTENSIONS: &str =
+    ".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2";
 
 /// The sample font bundled with the page, for visitors who arrive without one.
 pub const SAMPLE_PATH: &str = "./fonts/Recursive-VF.subset.ttf";

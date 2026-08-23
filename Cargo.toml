@@ -7,7 +7,9 @@ version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/felipesanches/slice-web"
-rust-version = "1.82"
+# 1.85 because `read-fonts` 0.43 and `wuff` 0.2 both declare it; the previous 1.82 had
+# already stopped being true when read-fonts moved.
+rust-version = "1.85"
 
 [workspace.dependencies]
 read-fonts = "0.43"
@@ -17,6 +19,10 @@ kurbo = "0.11"
 flo_curves = "0.8"
 thiserror = "2"
 log = "0.4"
+# WOFF2: `wuff` decodes, `brotli` compresses. Both are pure Rust, so the wasm build
+# stays free of any C toolchain. See crates/slice-core/src/font/woff2.rs for why.
+wuff = { version = "0.2.8", default-features = false, features = ["brotli"] }
+brotli = { version = "8", default-features = false, features = ["std"] }
 
 [profile.release]
 opt-level = "z"

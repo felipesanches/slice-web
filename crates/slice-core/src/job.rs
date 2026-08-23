@@ -27,6 +27,8 @@ pub enum OutputFormat {
     Sfnt,
     /// WOFF 1.0.
     Woff,
+    /// WOFF2.
+    Woff2,
 }
 
 impl OutputFormat {
@@ -39,13 +41,16 @@ impl OutputFormat {
             OutputFormat::Sfnt if is_truetype => "ttf",
             OutputFormat::Sfnt => "otf",
             OutputFormat::Woff => "woff",
+            OutputFormat::Woff2 => "woff2",
         }
     }
 
     /// Guess the format from a file name the user typed.
     pub fn from_filename(name: &str) -> OutputFormat {
         let lower = name.to_ascii_lowercase();
-        if lower.ends_with(".woff") {
+        if lower.ends_with(".woff2") {
+            OutputFormat::Woff2
+        } else if lower.ends_with(".woff") {
             OutputFormat::Woff
         } else {
             OutputFormat::Sfnt
@@ -56,6 +61,7 @@ impl OutputFormat {
         match self {
             OutputFormat::Sfnt => "font/ttf",
             OutputFormat::Woff => "font/woff",
+            OutputFormat::Woff2 => "font/woff2",
         }
     }
 }
@@ -286,9 +292,16 @@ impl SliceJob {
         notes.push("Recalculated metrics and pruned unused name records".to_string());
 
         // Container.
-        if self.format == OutputFormat::Woff {
-            bytes = crate::font::woff::encode_woff(&bytes)?;
-            notes.push("Wrapped as WOFF".to_string());
+        match self.format {
+            OutputFormat::Sfnt => {}
+            OutputFormat::Woff => {
+                bytes = crate::font::woff::encode_woff(&bytes)?;
+                notes.push("Wrapped as WOFF".to_string());
+            }
+            OutputFormat::Woff2 => {
+                bytes = crate::font::woff2::encode_woff2(&bytes)?;
+                notes.push("Wrapped as WOFF2".to_string());
+            }
         }
 
         Ok(SliceOutput {
@@ -554,12 +567,56 @@ mod tests {
     }
 
     #[test]
+    fn woff2_output_is_a_woff2_file_that_reads_back() {
+        let font = font();
+        let mut job = pin_all(&font);
+        job.limits[2] = AxisLimit::Pin(700.0);
+        job.format = OutputFormat::Woff2;
+
+        let output = job.run(&font).unwrap();
+        assert_eq!(&output.bytes[..4], b"wOF2");
+
+        let reopened = SliceFont::load(output.bytes).unwrap();
+        assert_eq!(reopened.glyph_count(), font.glyph_count());
+    }
+
+    #[test]
+    fn woff2_output_is_smaller_than_woff_which_is_smaller_than_sfnt() {
+        let font = font();
+        let mut job = pin_all(&font);
+        job.limits[2] = AxisLimit::Pin(700.0);
+
+        let mut size_of = |format| {
+            job.format = format;
+            job.run(&font).unwrap().bytes.len()
+        };
+        let sfnt = size_of(OutputFormat::Sfnt);
+        let woff = size_of(OutputFormat::Woff);
+        let woff2 = size_of(OutputFormat::Woff2);
+        assert!(
+            woff2 < woff && woff < sfnt,
+            "expected woff2 < woff < sfnt, got {woff2} < {woff} < {sfnt}"
+        );
+    }
+
+    #[test]
     fn the_output_extension_follows_the_format() {
         assert_eq!(OutputFormat::Sfnt.extension(true), "ttf");
         assert_eq!(OutputFormat::Sfnt.extension(false), "otf");
         assert_eq!(OutputFormat::Woff.extension(true), "woff");
+        assert_eq!(OutputFormat::Woff2.extension(true), "woff2");
         assert_eq!(OutputFormat::from_filename("Test.WOFF"), OutputFormat::Woff);
         assert_eq!(OutputFormat::from_filename("Test.ttf"), OutputFormat::Sfnt);
+        // `.woff2` must not be mistaken for `.woff`, in either case.
+        assert_eq!(
+            OutputFormat::from_filename("Test.woff2"),
+            OutputFormat::Woff2
+        );
+        assert_eq!(
+            OutputFormat::from_filename("Test.WOFF2"),
+            OutputFormat::Woff2
+        );
+        assert_eq!(OutputFormat::Woff2.mime_type(), "font/woff2");
     }
 
     #[test]
