@@ -8,6 +8,7 @@ something that is already in the tree.
 |---|---|
 | `gen-solver-vectors.py` | Does our sub-space solver agree with fontTools' on every case fontTools tests? |
 | `browser-smoke.sh` | Does the application start in a real browser and read a font through it? |
+| `browser-slice-test.py` | If someone fills in the editors and presses Slice, do they get the font they asked for? |
 
 Two more live as cargo examples next to the code they debug, rather than here:
 
@@ -78,3 +79,32 @@ The signals it checks are chosen to fail loudly rather than subtly:
 Note that input values are asserted through the `value` attribute. Leptos drives inputs
 through the DOM *property*, which a serialised DOM does not show, so the components set
 both; the attribute exists to make the state inspectable from outside.
+
+## `browser-slice-test.py`
+
+`browser-smoke.sh` proves the application starts and reads a font. `cargo test` proves
+the engine is right. Neither covers the path between them: the click handler, the job
+the interface builds out of the three editors, and the Blob handed back as a download.
+
+```sh
+tools/browser-slice-test.py              # build, then run
+tools/browser-slice-test.py --no-build   # use whatever is in dist/
+tools/browser-slice-test.py --keep       # leave the produced fonts in the repo root
+```
+
+It drives Chromium over the DevTools protocol: opens the page with the sample font,
+types into the Axis Editor and the Name Editor through the native value setter (so
+Leptos sees the `input` events), ticks overlap removal, and presses Slice. Rather than
+intercept a real download it wraps `URL.createObjectURL`, so the exact bytes the page
+produced come back to the script.
+
+Those bytes are then read by `slice-cli`, which is what makes this worth having: the
+browser made the font and the *native* engine has to agree it is one, with the family
+name the interface set, no `fvar` left, and the glyph count intact. It then slices a
+second time with `wght` restricted to `300:700` instead, checking the partial path leaves
+a variable font with only that axis, at its new extent.
+
+The DevTools client is about a hundred lines of socket code rather than a dependency.
+That is a deliberate trade: this repository needs nothing but a Rust toolchain and a
+browser, and keeping it that way is worth more than the lines saved. Like the smoke test,
+it exits 0 with a message when no browser is on PATH.

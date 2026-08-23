@@ -37,6 +37,7 @@ jobs:
       - run: ./build.sh
       # Ubuntu runners ship chromium, which is what the smoke test looks for.
       - run: tools/browser-smoke.sh --no-build
+      - run: tools/browser-slice-test.py --no-build
       - uses: actions/upload-artifact@v4
         with:
           name: slice-web
