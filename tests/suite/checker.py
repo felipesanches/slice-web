@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from fontTools import ttLib
-from fontTools.pens.recordingPen import RecordingPen
+from fontTools.pens.recordingPen import DecomposingRecordingPen
 
 
 # --------------------------------------------------------------------------- result
@@ -140,12 +140,22 @@ def _segments_cross(a0, a1, b0, b1) -> bool:
 # --------------------------------------------------------------------------- drawing
 
 def _draw(font: ttLib.TTFont, glyph_name: str, location: dict | None) -> list:
-    """Recorded pen output for one glyph, optionally at a variation location."""
+    """Recorded pen output for one glyph, optionally at a variation location.
+
+    The pen decomposes. A plain `RecordingPen` records `addComponent` verbatim, so a
+    composite glyph arrives here as a list of glyph *names* and transforms with no
+    geometry in it at all: `_flatten` then sees no contours and reports the glyph as
+    empty, and `_round_ops` is handed a string and raises. Every check built on this
+    function asks a question about the filled shape -- which points are inside, do edges
+    cross, do two fonts draw the same thing -- and the answer for a composite is the
+    shape its components make. Composite-ness itself is not lost, because
+    `glyph_component_count` reads it from the `glyf` table directly.
+    """
     if location:
         glyph_set = font.getGlyphSet(location=location)
     else:
         glyph_set = font.getGlyphSet()
-    pen = RecordingPen()
+    pen = DecomposingRecordingPen(glyph_set)
     glyph_set[glyph_name].draw(pen)
     return pen.value
 
@@ -186,9 +196,13 @@ def _compare_outlines(reference, actual, tolerance: float) -> str | None:
 # ---------------------------------------------------------------------------- checks
 
 class Checker:
-    def __init__(self, output_path: str, source_path: str):
+    def __init__(self, output_path: str, source_path: str, peers: dict | None = None):
         self.font = ttLib.TTFont(output_path)
         self.source_path = source_path
+        # Outputs of other cases in the same run, by case id. Round-tripping is an
+        # equality between two *outputs*, and checking each against the source
+        # separately would give each its own slack.
+        self.peers = peers or {}
         self._source = None
 
     @property
@@ -416,6 +430,276 @@ class Checker:
         dangling = sorted(present - used)
         return not dangling, f"{len(dangling)} unreferenced name IDs above 255: {dangling[:8]}"
 
+    def name_record_at(self, spec):
+        record = self.font["name"].getName(
+            int(spec["id"]), int(spec["platform"]), int(spec["encoding"]),
+            int(spec["language"]),
+        )
+        actual = record.toUnicode() if record else None
+        return actual == spec["equals"], (
+            f"nameID {spec['id']} at "
+            f"{spec['platform']}/{spec['encoding']}/{spec['language']} is {actual!r}"
+        )
+
+    def name_absent_at(self, spec):
+        record = self.font["name"].getName(
+            int(spec["id"]), int(spec["platform"]), int(spec["encoding"]),
+            int(spec["language"]),
+        )
+        return record is None, f"the record is {'present' if record else 'absent'}"
+
+    def name_record_count(self, spec):
+        n = sum(1 for r in self.font["name"].names if r.nameID == int(spec["id"]))
+        return n == spec["equals"], f"{n} records with nameID {spec['id']}"
+
+    def name_encoding(self, spec):
+        record = self.font["name"].getName(
+            int(spec["id"]), int(spec["platform"]), int(spec["encoding"]),
+            int(spec["language"]),
+        )
+        if record is None:
+            return False, "no such record"
+        actual = record.getEncoding()
+        return actual == spec["equals"], f"encoding is {actual!r}"
+
+    def name_records_sorted(self, _):
+        """The specification requires the record array in ascending order.
+
+        Sorted by platform, then encoding, then language, then name ID. A font whose
+        records are out of order is malformed even though most software copes.
+        """
+        keys = [
+            (r.platformID, r.platEncID, r.langID, r.nameID)
+            for r in self.font["name"].names
+        ]
+        return keys == sorted(keys), (
+            "in order" if keys == sorted(keys) else f"first {min(3, len(keys))} out of order"
+        )
+
+    def name_references_resolve(self, _):
+        """Every name ID something points at must actually exist.
+
+        The mirror image of `no_dangling_name_ids`: that one finds records nothing
+        refers to, this one finds references to records that are not there, which is
+        what a too-eager pruning pass produces.
+        """
+        present = {r.nameID for r in self.font["name"].names}
+        wanted: set[int] = set()
+        if "fvar" in self.font:
+            for axis in self.font["fvar"].axes:
+                wanted.add(axis.axisNameID)
+            for instance in self.font["fvar"].instances:
+                wanted.add(instance.subfamilyNameID)
+                if getattr(instance, "postscriptNameID", 0xFFFF) != 0xFFFF:
+                    wanted.add(instance.postscriptNameID)
+        if "STAT" in self.font:
+            stat = self.font["STAT"].table
+            if stat.DesignAxisRecord:
+                for axis in stat.DesignAxisRecord.Axis:
+                    wanted.add(axis.AxisNameID)
+            if stat.AxisValueArray:
+                for value in stat.AxisValueArray.AxisValue:
+                    wanted.add(value.ValueNameID)
+            fallback = getattr(stat, "ElidedFallbackNameID", None)
+            if fallback is not None:
+                wanted.add(fallback)
+        missing = sorted(wanted - present)
+        return not missing, f"references to absent name IDs: {missing}"
+
+    # -- glyf structure
+
+    def _glyf(self):
+        return self.font["glyf"] if "glyf" in self.font else None
+
+    def glyph_component_count(self, spec):
+        glyf = self._glyf()
+        if glyf is None:
+            return False, "not a glyf font"
+        if spec["glyph"] not in self.font.getGlyphOrder():
+            return False, f"no glyph named {spec['glyph']}"
+        glyph = glyf[spec["glyph"]]
+        n = len(glyph.components) if glyph.isComposite() else 0
+        return n == spec["equals"], (
+            f"{spec['glyph']} has {n} components"
+            + (" (it is a simple glyph)" if n == 0 else "")
+        )
+
+    def _overlap_state(self):
+        """(simple flags seen, compound flags seen) across the font."""
+        glyf = self._glyf()
+        simple, compound = [], []
+        for name in self.font.getGlyphOrder():
+            glyph = glyf[name]
+            if glyph.isComposite():
+                if glyph.components:
+                    compound.append(bool(glyph.components[0].flags & 0x0400))
+            elif glyph.numberOfContours > 0 and len(getattr(glyph, "flags", [])):
+                simple.append(bool(glyph.flags[0] & 0x40))
+        return simple, compound
+
+    def overlap_flags(self, spec):
+        if self._glyf() is None:
+            return True, "not a glyf font, so there are no such flags"
+        simple, compound = self._overlap_state()
+        problems = []
+        if "simple" in spec and simple and all(simple) != bool(spec["simple"]):
+            problems.append(f"OVERLAP_SIMPLE is {simple.count(True)}/{len(simple)}")
+        if "compound" in spec and compound and all(compound) != bool(spec["compound"]):
+            problems.append(f"OVERLAP_COMPOUND is {compound.count(True)}/{len(compound)}")
+        return not problems, "; ".join(problems) or (
+            f"{len(simple)} simple, {len(compound)} composite glyphs as expected"
+        )
+
+    def overlap_flags_present(self, spec):
+        if self._glyf() is None:
+            return True, "not a glyf font"
+        simple, compound = self._overlap_state()
+        seen = simple + compound
+        want = bool(spec["equals"])
+        actual = all(seen) if want else not any(seen)
+        return actual, f"{sum(seen)} of {len(seen)} glyphs carry an overlap flag"
+
+    def composites_preserved(self, spec):
+        """A composite in the source must still be a composite, unless excused.
+
+        Decomposing one costs the size saving it existed for, so a tool should only do
+        it when it must — which, for overlap removal, is when its components overlap.
+        """
+        glyf = self._glyf()
+        source_glyf = self.source["glyf"] if "glyf" in self.source else None
+        if glyf is None or source_glyf is None:
+            return True, "not a glyf font"
+        excused = set(spec.get("except_glyphs", []))
+        decomposed = []
+        for name in self.source.getGlyphOrder():
+            if name in excused or name not in self.font.getGlyphOrder():
+                continue
+            if source_glyf[name].isComposite() and not glyf[name].isComposite():
+                decomposed.append(name)
+        return not decomposed, f"decomposed: {decomposed}" if decomposed else "all kept"
+
+    def glyph_instructions_preserved(self, _):
+        glyf = self._glyf()
+        source_glyf = self.source["glyf"] if "glyf" in self.source else None
+        if glyf is None or source_glyf is None:
+            return True, "not a glyf font"
+        lost = []
+        for name in self.source.getGlyphOrder():
+            if name not in self.font.getGlyphOrder():
+                continue
+            before = getattr(source_glyf[name], "program", None)
+            after = getattr(glyf[name], "program", None)
+            before_bytes = before.getBytecode() if before else b""
+            after_bytes = after.getBytecode() if after else b""
+            if before_bytes and before_bytes != after_bytes:
+                lost.append(name)
+        return not lost, f"instructions changed or dropped on: {lost}" if lost else "kept"
+
+    def maxp_covers_instructions(self, _):
+        """`maxp.maxSizeOfInstructions` must be at least the longest glyph program.
+
+        fontTools does not recalculate this field, so it is inherited from the input and
+        can end up too small once glyphs change. A rasteriser sizes its instruction
+        buffer from it.
+        """
+        glyf = self._glyf()
+        if glyf is None or not hasattr(self.font["maxp"], "maxSizeOfInstructions"):
+            return True, "not a glyf font with maxp 1.0"
+        longest = 0
+        for name in self.font.getGlyphOrder():
+            program = getattr(glyf[name], "program", None)
+            if program is not None:
+                longest = max(longest, len(program.getBytecode()))
+        declared = self.font["maxp"].maxSizeOfInstructions
+        return declared >= longest, (
+            f"maxp says {declared}, the longest program is {longest} bytes"
+        )
+
+    def matches_case_output(self, spec):
+        """Compare against another case's output, run with the same program."""
+        other = self.peers.get(spec["case"])
+        if other is None:
+            return False, f"the output of {spec['case']} was not available"
+        try:
+            peer = ttLib.TTFont(other)
+        except Exception as e:  # noqa: BLE001
+            return False, f"{spec['case']} did not produce a readable font: {e}"
+
+        # A case can narrow the comparison to particular glyphs. Some obligations are
+        # about one glyph while its neighbours in the same font are required to change:
+        # a clean glyph must survive overlap removal untouched in a font that also holds
+        # glyphs the removal is supposed to rewrite.
+        only = spec.get("glyphs")
+        names = [n for n in peer.getGlyphOrder() if only is None or n in only]
+        if only is not None:
+            missing = [n for n in only if n not in peer.getGlyphOrder()]
+            if missing:
+                return False, f"{spec['case']} has no glyph {missing}"
+
+        for what in spec.get("compare", []):
+            if what == "tables":
+                a, b = sorted(peer.keys()), sorted(self.font.keys())
+                if a != b:
+                    return False, f"table sets differ: {set(a) ^ set(b)}"
+            elif what == "glyph_order":
+                if peer.getGlyphOrder() != self.font.getGlyphOrder():
+                    return False, "glyph orders differ"
+            elif what == "outlines":
+                for name in names:
+                    a = _round_ops(_draw(peer, name, None))
+                    b = _round_ops(_draw(self.font, name, None))
+                    if a != b:
+                        return False, f"glyph {name} differs from {spec['case']}"
+            elif what == "advances":
+                for name in names:
+                    if peer["hmtx"][name] != self.font["hmtx"][name]:
+                        return False, f"metrics for {name} differ from {spec['case']}"
+            elif what == "glyph_points":
+                # Stronger than comparing drawn outlines: this asks whether the stored
+                # points are the same points, in the same order, with the same on/off
+                # curve flags. That is the difference between "the glyph still draws the
+                # same shape" and "the glyph was not rebuilt" -- a boolean engine that
+                # renumbers points or refits a curve through rounded intersections can
+                # preserve the first while destroying the second.
+                pg, sg = peer.get("glyf"), self.font.get("glyf")
+                if pg is None or sg is None:
+                    return False, "glyph_points needs a glyf table in both fonts"
+                for name in names:
+                    a, b = pg[name], sg[name]
+                    if a.numberOfContours != b.numberOfContours:
+                        return False, (
+                            f"glyph {name}: {a.numberOfContours} contours in "
+                            f"{spec['case']}, {b.numberOfContours} here"
+                        )
+                    if a.isComposite():
+                        av = [(c.glyphName, c.x, c.y) for c in a.components]
+                        bv = [(c.glyphName, c.x, c.y) for c in b.components]
+                        if av != bv:
+                            return False, f"glyph {name}: components differ"
+                        continue
+                    if list(a.endPtsOfContours) != list(b.endPtsOfContours):
+                        return False, f"glyph {name}: contour boundaries differ"
+                    if list(a.coordinates) != list(b.coordinates):
+                        return False, (
+                            f"glyph {name}: {len(a.coordinates)} points in "
+                            f"{spec['case']}, {len(b.coordinates)} here, and they differ"
+                        )
+                    # Bit 0 is on-curve; bit 6 is OVERLAP_SIMPLE, which overlap removal
+                    # is separately required to clear, so comparing it would contradict
+                    # `overlap.no-overlap-flags-after-removal`.
+                    if [f & 0x01 for f in a.flags] != [f & 0x01 for f in b.flags]:
+                        return False, f"glyph {name}: on-curve flags differ"
+            elif what == "instructions":
+                pg, sg = peer.get("glyf"), self.font.get("glyf")
+                if pg is None or sg is None:
+                    continue
+                for name in names:
+                    a = getattr(pg[name], "program", None)
+                    b = getattr(sg[name], "program", None)
+                    if (a.getBytecode() if a else b"") != (b.getBytecode() if b else b""):
+                        return False, f"instructions for {name} differ"
+        return True, f"matches {spec['case']}"
+
     # -- outlines
 
     def _location_for(self, font, location):
@@ -634,7 +918,41 @@ def _near_edge(contours, x, y, margin) -> bool:
 
 # --------------------------------------------------------------------------- driver
 
-def evaluate(case: dict, outcome: dict, source_path: str) -> CaseResult:
+def _evaluate_editor(case: dict, outcome: dict) -> CaseResult:
+    """Score a `load_only` case, whose expectations are about the editor, not a font."""
+    rows = outcome.get("editor", {}).get("axes", [])
+    results: list[CheckResult] = []
+    for spec in case.get("expect", {}).get("checks", []):
+        if spec.get("kind") != "editor_axis_rows":
+            results.append(CheckResult(spec.get("kind"), False,
+                                       "only editor_axis_rows applies to a load_only case"))
+            continue
+        want = spec["equals"]
+        if len(rows) != len(want):
+            results.append(CheckResult("editor_axis_rows", False,
+                                       f"{len(rows)} rows, expected {len(want)}"))
+            continue
+        problem = None
+        for index, (expected, actual) in enumerate(zip(want, rows)):
+            for key, value in expected.items():
+                got = actual.get(key)
+                if isinstance(value, (int, float)) and isinstance(got, (int, float)):
+                    same = math.isclose(float(got), float(value), abs_tol=1e-6)
+                else:
+                    same = got == value
+                if not same:
+                    problem = f"row {index} {key}: {got!r}, expected {value!r}"
+                    break
+            if problem:
+                break
+        results.append(CheckResult("editor_axis_rows", problem is None, problem or "rows match"))
+    failed = [r for r in results if not r.passed]
+    return CaseResult(case["id"], not failed,
+                      "" if not failed else f"{len(failed)} of {len(results)} checks failed",
+                      results)
+
+
+def evaluate(case: dict, outcome: dict, source_path: str, peers: dict | None = None) -> CaseResult:
     """Score one case against what a runner produced."""
     expect = case.get("expect", {})
     want = expect.get("outcome", "success")
@@ -655,8 +973,11 @@ def evaluate(case: dict, outcome: dict, source_path: str) -> CaseResult:
     if not outcome.get("ok"):
         return CaseResult(case_id, False, f"the tool refused: {outcome.get('error')}")
 
+    if "editor" in outcome:
+        return _evaluate_editor(case, outcome)
+
     try:
-        checker = Checker(outcome["path"], source_path)
+        checker = Checker(outcome["path"], source_path, peers)
     except Exception as e:  # noqa: BLE001
         return CaseResult(case_id, False, f"the output could not be opened as a font: {e}")
 

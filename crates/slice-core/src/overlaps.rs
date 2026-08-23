@@ -27,7 +27,7 @@ use kurbo::{BezPath, CubicBez, ParamCurve, PathEl, Point, Shape};
 use read_fonts::tables::glyf::CurvePoint;
 use read_fonts::{FontRef, TableProvider};
 use write_fonts::tables::glyf::{Contour, GlyfLocaBuilder, Glyph as WGlyph, SimpleGlyph};
-use write_fonts::types::GlyphId;
+use write_fonts::types::{GlyphId, Tag};
 use write_fonts::{from_obj::ToOwnedTable, FontBuilder};
 
 use flo_curves::bezier::path::SimpleBezierPath;
@@ -121,12 +121,28 @@ pub fn remove_overlaps(font_bytes: &[u8]) -> Result<(Vec<u8>, OverlapReport), Sl
         }
     }
 
-    // Hinting no longer describes these outlines. Drop it from every glyph, not just the
-    // modified ones, so the font is consistently unhinted rather than partly so.
+    // Hinting no longer describes these outlines. TrueType instructions address points
+    // by index -- SRP0, MDAP, IUP all take point numbers -- and merging contours
+    // renumbers them, so a surviving program would move the wrong points. Drop it from
+    // every glyph, not just the modified ones, so the font is consistently unhinted
+    // rather than partly so.
+    //
+    // The overlap flags go with them. OVERLAP_SIMPLE and OVERLAP_COMPOUND tell the
+    // rasterizer "this glyph self-overlaps, composite it before filling"; leaving them
+    // set on outlines that no longer overlap is a false statement about the font, and it
+    // gives away the rendering speed the removal was for.
     for glyph in &mut glyphs {
         match glyph {
-            WGlyph::Simple(simple) => simple.instructions.clear(),
-            WGlyph::Composite(composite) => composite.set_instructions(&[]),
+            WGlyph::Simple(simple) => {
+                simple.instructions.clear();
+                simple.overlaps = false;
+            }
+            WGlyph::Composite(composite) => {
+                composite.set_instructions(&[]);
+                for component in composite.components_mut() {
+                    component.flags.overlap_compound = false;
+                }
+            }
             WGlyph::Empty => {}
         }
     }
@@ -149,7 +165,25 @@ pub fn remove_overlaps(font_bytes: &[u8]) -> Result<(Vec<u8>, OverlapReport), Sl
     out.add_table(&head)
         .map_err(|e| SliceError::Write(e.to_string()))?;
 
-    crate::instancer::statics::copy_remaining_tables(&mut out, &font, &[]);
+    // The hinting programs go the same way as the per-glyph instructions, and for the
+    // same reason: `prep` and `fpgm` are written against a point numbering that no
+    // longer exists, and `cvt ` holds the control values they read. Keeping any of them
+    // would leave a font that hints itself into the wrong shape at small sizes.
+    let hinting = [Tag::new(b"prep"), Tag::new(b"fpgm"), Tag::new(b"cvt ")];
+
+    // maxp must stop advertising instruction space the font no longer has.
+    let mut maxp: write_fonts::tables::maxp::Maxp = font.maxp()?.to_owned_table();
+    maxp.max_size_of_instructions = Some(0);
+    maxp.max_zones = Some(0);
+    maxp.max_twilight_points = Some(0);
+    maxp.max_storage = Some(0);
+    maxp.max_function_defs = Some(0);
+    maxp.max_instruction_defs = Some(0);
+    maxp.max_stack_elements = Some(0);
+    out.add_table(&maxp)
+        .map_err(|e| SliceError::Write(e.to_string()))?;
+
+    crate::instancer::statics::copy_remaining_tables(&mut out, &font, &hinting);
     Ok((out.build(), report))
 }
 

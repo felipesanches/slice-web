@@ -721,7 +721,7 @@
         "H1"
       ],
       "class": "judgement",
-      "rationale": "`.ttf` and `.otf` name the same container — a bare sfnt — and differ only in convention about which outline format is inside. Converting quadratic `glyf` curves to CFF cubics is a lossy re-drawing of every glyph that the user did not ask for, and the OpenType specification treats the outline format as a property of the font, not of the filename. So the honest reading of H1 is that the extension selects the *container*, and `.ttf` versus `.otf` selects nothing: the output must still be a glyf-flavoured sfnt.",
+      "rationale": "`.ttf` and `.otf` name the same container \u2014 a bare sfnt \u2014 and differ only in convention about which outline format is inside. Converting quadratic `glyf` curves to CFF cubics is a lossy re-drawing of every glyph that the user did not ask for, and the OpenType specification treats the outline format as a property of the font, not of the filename. So the honest reading of H1 is that the extension selects the *container*, and `.ttf` versus `.otf` selects nothing: the output must still be a glyf-flavoured sfnt.",
       "fixture": "recursive-vf",
       "input": {
         "axes": {
@@ -856,7 +856,7 @@
         "H1"
       ],
       "class": "slice-ui",
-      "rationale": "The mirror image of the previous two, and the direction in which the original's behaviour is most surprising. **The original fails this case:** because the flavor is inherited from the reader, a WOFF input always writes a WOFF, so a user who opens a `.woff` and saves as `.ttf` gets a WOFF file with a `.ttf` name — verified with fontTools 4.62.1, flavor `woff`, 1628 bytes. A desktop font manager asked to install that file will reject it. H1 says the extension decides, and the extension here says sfnt.",
+      "rationale": "The mirror image of the previous two, and the direction in which the original's behaviour is most surprising. **The original fails this case:** because the flavor is inherited from the reader, a WOFF input always writes a WOFF, so a user who opens a `.woff` and saves as `.ttf` gets a WOFF file with a `.ttf` name \u2014 verified with fontTools 4.62.1, flavor `woff`, 1628 bytes. A desktop font manager asked to install that file will reject it. H1 says the extension decides, and the extension here says sfnt.",
       "fixture": "recursive-vf-woff",
       "input": {
         "axes": {
@@ -944,7 +944,7 @@
         "H1"
       ],
       "class": "fonttools",
-      "rationale": "The one WOFF-output combination the original gets right, and it gets it right by accident: the flavor is inherited from the input rather than chosen from the extension, and here the two happen to agree. Including it makes the failure pattern of the four cross-container cases interpretable — a runner that fails all of `ttf-in-woff-out`, `woff-in-ttf-out` and their WOFF2 twins but passes this one is inheriting the flavor, not ignoring containers entirely. The outline check is carried through so that a WOFF-to-WOFF path is not exempt from G13.",
+      "rationale": "The one WOFF-output combination the original gets right, and it gets it right by accident: the flavor is inherited from the input rather than chosen from the extension, and here the two happen to agree. Including it makes the failure pattern of the four cross-container cases interpretable \u2014 a runner that fails all of `ttf-in-woff-out`, `woff-in-ttf-out` and their WOFF2 twins but passes this one is inheriting the flavor, not ignoring containers entirely. The outline check is carried through so that a WOFF-to-WOFF path is not exempt from G13.",
       "fixture": "recursive-vf-woff",
       "input": {
         "axes": {
@@ -1260,7 +1260,7 @@
         "H2"
       ],
       "class": "judgement",
-      "rationale": "H2 records that the original sets `sfnt.USE_ZOPFLI = True` before saving (`instanceworker.py:69`), but zopfli emits an ordinary DEFLATE stream: the WOFF 1.0 specification requires only that each table be compressed with zlib, and a decoder cannot tell which encoder produced the bytes. The only observable difference is file size, and asserting a size would fail any implementation that used a different but equally valid deflate library, which is a test of the toolchain rather than of the font. This case therefore covers H2 by asserting what actually matters — that the WOFF decodes to the right font — and records that no size or encoder assertion belongs in this corpus.",
+      "rationale": "H2 records that the original sets `sfnt.USE_ZOPFLI = True` before saving (`instanceworker.py:69`), but zopfli emits an ordinary DEFLATE stream: the WOFF 1.0 specification requires only that each table be compressed with zlib, and a decoder cannot tell which encoder produced the bytes. The only observable difference is file size, and asserting a size would fail any implementation that used a different but equally valid deflate library, which is a test of the toolchain rather than of the font. This case therefore covers H2 by asserting what actually matters \u2014 that the WOFF decodes to the right font \u2014 and records that no size or encoder assertion belongs in this corpus.",
       "fixture": "recursive-vf",
       "input": {
         "axes": {
@@ -1382,7 +1382,7 @@
       ],
       "original_lacks_feature": true,
       "class": "judgement",
-      "rationale": "Two crossing rectangles under the non-zero winding rule fill a plus sign; removing the overlap must produce the outline of that plus sign, which is one contour of twelve points, not two rectangles. This is the simplest possible statement of what overlap removal means, and the contour count is the observable that distinguishes 'merged' from 'left alone but flagged'. The filled region must be identical because the rendered result was already the plus sign — overlap removal changes the description, never the picture. **The original never removes overlaps** (G14): it passes no `overlap` argument to `instantiateVariableFont`, so it is expected to fail this case.",
+      "rationale": "Two crossing rectangles under the non-zero winding rule fill a plus sign; removing the overlap must produce the outline of that plus sign, which is one contour of twelve points, not two rectangles. This is the simplest possible statement of what overlap removal means, and the contour count is the observable that distinguishes 'merged' from 'left alone but flagged'. The filled region must be identical because the rendered result was already the plus sign \u2014 overlap removal changes the description, never the picture. **The original never removes overlaps** (G14): it passes no `overlap` argument to `instantiateVariableFont`, so it is expected to fail this case.",
       "fixture": "overlapping",
       "input": {
         "axes": {
@@ -1422,7 +1422,7 @@
       ],
       "original_lacks_feature": true,
       "class": "spec",
-      "rationale": "TrueType fills with the non-zero winding rule (OpenType `glyf`), under which a counter is a contour wound opposite to the outer contour and therefore subtracts. A boolean-union implementation that treats every contour as an additive region fills counters in and destroys 'o', 'e', 'a', 'B' and 'p' throughout the font — a failure that is invisible to any outline-coordinate comparison but obvious to `filled_region_matches`. Two contours must remain and the hole must remain a hole. **The original never removes overlaps** (G14) and is expected to fail.",
+      "rationale": "TrueType fills with the non-zero winding rule (OpenType `glyf`), under which a counter is a contour wound opposite to the outer contour and therefore subtracts. A boolean-union implementation that treats every contour as an additive region fills counters in and destroys 'o', 'e', 'a', 'B' and 'p' throughout the font \u2014 a failure that is invisible to any outline-coordinate comparison but obvious to `filled_region_matches`. Two contours must remain and the hole must remain a hole. **The original never removes overlaps** (G14) and is expected to fail.",
       "fixture": "overlapping",
       "input": {
         "axes": {
@@ -1499,7 +1499,7 @@
       ],
       "original_lacks_feature": true,
       "class": "judgement",
-      "rationale": "A single contour that crosses itself — a figure-eight or a bowtie — has no 'other contour' to union with, so an implementation built only around pairwise contour booleans has nothing to do and leaves it alone. Under non-zero winding a bowtie fills both lobes and a figure-eight cancels its inner region, so the correct result depends on the crossing's orientation and cannot be guessed. Requiring `no_self_intersections` on the output while requiring the filled region to be unchanged pins down both halves of the answer. **The original never removes overlaps** (G14) and is expected to fail.",
+      "rationale": "A single contour that crosses itself \u2014 a figure-eight or a bowtie \u2014 has no 'other contour' to union with, so an implementation built only around pairwise contour booleans has nothing to do and leaves it alone. Under non-zero winding a bowtie fills both lobes and a figure-eight cancels its inner region, so the correct result depends on the crossing's orientation and cannot be guessed. Requiring `no_self_intersections` on the output while requiring the filled region to be unchanged pins down both halves of the answer. **The original never removes overlaps** (G14) and is expected to fail.",
       "fixture": "overlapping",
       "input": {
         "axes": {
@@ -1569,7 +1569,7 @@
       ],
       "original_lacks_feature": true,
       "class": "judgement",
-      "rationale": "The point of the feature is to produce outlines usable by consumers that cannot handle overlaps — PostScript printers, the CFF outline format, and pre-composition renderers that stroke rather than fill. A per-glyph pass that resolves the glyphs the test happens to name but leaves others intersecting delivers none of that, so the property has to be asserted over the whole font. Paired with the control case, which asserts the same font *does* self-intersect before removal, this is a real before/after and not a tautology. **The original never removes overlaps** (G14) and is expected to fail.",
+      "rationale": "The point of the feature is to produce outlines usable by consumers that cannot handle overlaps \u2014 PostScript printers, the CFF outline format, and pre-composition renderers that stroke rather than fill. A per-glyph pass that resolves the glyphs the test happens to name but leaves others intersecting delivers none of that, so the property has to be asserted over the whole font. Paired with the control case, which asserts the same font *does* self-intersect before removal, this is a real before/after and not a tautology. **The original never removes overlaps** (G14) and is expected to fail.",
       "fixture": "overlapping",
       "input": {
         "axes": {
@@ -1594,6 +1594,30 @@
       }
     },
     {
+      "id": "overlap.control-same-job-without-removal",
+      "title": "The same slice with overlap removal off, as a control for what removal changes",
+      "covers": [
+        "G14"
+      ],
+      "class": "judgement",
+      "rationale": "Not an obligation of its own but the baseline the removal cases measure against. It runs exactly the job `overlap.clean-glyph-is-left-alone` runs, with the one checkbox off, so that any difference between the two outputs is attributable to overlap removal and nothing else. Comparing a removal run against the *source* font cannot do that job, because instancing to wght=400 changes the outlines by itself. Every implementation is expected to pass this, including the original, which is simply doing an ordinary slice.",
+      "fixture": "overlapping",
+      "input": {
+        "axes": {
+          "wght": "400"
+        },
+        "format": "ttf"
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "parses_as_font"
+          }
+        ]
+      }
+    },
+    {
       "id": "overlap.clean-glyph-is-left-alone",
       "title": "A glyph with no overlaps is not rebuilt",
       "covers": [
@@ -1601,7 +1625,7 @@
       ],
       "original_lacks_feature": true,
       "class": "judgement",
-      "rationale": "Passing a clean glyph through a boolean engine costs something and gains nothing: the engine renumbers points, may re-fit curves through rounded intersection points that were never needed, and can convert an exact quadratic into an approximation. fontTools takes exactly this position — `removeTTGlyphOverlaps` compares the simplified path with the original and only replaces the glyph `if not _same_path(path, path2)` (`ttLib/removeOverlaps.py`). So an untouched glyph must be byte-identical to what the same job produces with the feature off, which is what the comparison against the control case asserts. **The original never removes overlaps** (G14) and is expected to fail.",
+      "rationale": "Passing a clean glyph through a boolean engine costs something and gains nothing: the engine renumbers points, may re-fit curves through rounded intersection points that were never needed, and can convert an exact quadratic into an approximation. fontTools takes exactly this position -- `removeTTGlyphOverlaps` compares the simplified path with the original and replaces the glyph only `if not _same_path(path, path2)` (`ttLib/removeOverlaps.py`). So `clean` must come out of a removal run with the same points, in the same order, as the same job produces with the feature off. The comparison is against that control run rather than against the source font, because instancing to wght=400 moves every outline on its own, and it is scoped to `clean` because `bars` in the same font is required to change -- `overlap.two-bars-merge-into-one-contour` asserts exactly that. Point-level rather than drawn-outline equality is the point: a rebuilt glyph can draw the same shape with different points, and that is the cost this case exists to forbid. **The original never removes overlaps** (G14) and is expected to fail.",
       "fixture": "overlapping",
       "input": {
         "axes": {
@@ -1619,11 +1643,15 @@
             "equals": 1
           },
           {
-            "kind": "outlines_match_source_at",
-            "location": {
-              "wght": 400
-            },
-            "tolerance": 1.0
+            "kind": "matches_case_output",
+            "case": "overlap.control-same-job-without-removal",
+            "glyphs": [
+              "clean"
+            ],
+            "compare": [
+              "glyph_points",
+              "advances"
+            ]
           }
         ]
       }
@@ -1636,7 +1664,7 @@
       ],
       "original_lacks_feature": true,
       "class": "fonttools",
-      "rationale": "Overlap removal is an operation on outlines; advance width is metrics, and nothing about merging two contours tells you anything about how much room the glyph should occupy. fontTools is explicit about the boundary: after replacing a glyph it rewrites only the left side bearing to match the new `xMin`, leaving the width alone — `hmtxTable[glyphName] = (width, glyph.xMin)` (`ttLib/removeOverlaps.py`). An implementation that recomputes advances from the merged bounding box would reflow every line of text set in the font. **The original never removes overlaps** (G14) and is expected to fail.",
+      "rationale": "Overlap removal is an operation on outlines; advance width is metrics, and nothing about merging two contours tells you anything about how much room the glyph should occupy. fontTools is explicit about the boundary: after replacing a glyph it rewrites only the left side bearing to match the new `xMin`, leaving the width alone \u2014 `hmtxTable[glyphName] = (width, glyph.xMin)` (`ttLib/removeOverlaps.py`). An implementation that recomputes advances from the merged bounding box would reflow every line of text set in the font. **The original never removes overlaps** (G14) and is expected to fail.",
       "fixture": "overlapping",
       "input": {
         "axes": {
@@ -1925,7 +1953,7 @@
       ],
       "original_lacks_feature": true,
       "class": "judgement",
-      "rationale": "The WOFF2 glyf transform re-encodes point flags and coordinates, and removal has just rewritten every merged glyph's point set, so this pairing is where an ordering bug — transforming before merging, or recomputing `loca` from stale data — would surface. There is no reason the two features should interact, and asserting that they do not is cheaper than debugging it later. The filled region and the absence of self-intersections must both survive the round trip through the container. **The original never removes overlaps** (G14) and is expected to fail.",
+      "rationale": "The WOFF2 glyf transform re-encodes point flags and coordinates, and removal has just rewritten every merged glyph's point set, so this pairing is where an ordering bug \u2014 transforming before merging, or recomputing `loca` from stale data \u2014 would surface. There is no reason the two features should interact, and asserting that they do not is cheaper than debugging it later. The filled region and the absence of self-intersections must both survive the round trip through the container. **The original never removes overlaps** (G14) and is expected to fail.",
       "fixture": "overlapping",
       "input": {
         "axes": {
@@ -1995,7 +2023,7 @@
         "G13"
       ],
       "class": "fonttools",
-      "rationale": "A tool asked to do something it cannot must refuse clearly rather than write a mangled font — the adjudicated verdict on B8 in this project — and for CFF2 the mangled outcome is concrete: charstrings still carrying `blend` operators in a font whose variation store has been removed, which the OpenType CFF2 specification makes meaningless because `blend` is defined only against an ItemVariationStore. But refusal is not required here, because fontTools 4.62.1 does implement CFF2 instancing: `instantiateCFF2` (`varLib/instancer/__init__.py:649`) is dispatched whenever `\"CFF2\" in varfont` (:1747), so the original, which delegates wholesale to `instantiateVariableFont`, is expected to succeed. By the corpus rule that a case the original passes this implementation must also pass, the expectation is success with correct outlines; an implementation that genuinely cannot do this must emit an error naming CFF2, never a font.",
+      "rationale": "A tool asked to do something it cannot must refuse clearly rather than write a mangled font \u2014 the adjudicated verdict on B8 in this project \u2014 and for CFF2 the mangled outcome is concrete: charstrings still carrying `blend` operators in a font whose variation store has been removed, which the OpenType CFF2 specification makes meaningless because `blend` is defined only against an ItemVariationStore. But refusal is not required here, because fontTools 4.62.1 does implement CFF2 instancing: `instantiateCFF2` (`varLib/instancer/__init__.py:649`) is dispatched whenever `\"CFF2\" in varfont` (:1747), so the original, which delegates wholesale to `instantiateVariableFont`, is expected to succeed. By the corpus rule that a case the original passes this implementation must also pass, the expectation is success with correct outlines; an implementation that genuinely cannot do this must emit an error naming CFF2, never a font.",
       "fixture": "cff2-vf",
       "input": {
         "axes": {
@@ -2073,7 +2101,7 @@
         "A3"
       ],
       "class": "judgement",
-      "rationale": "Converting cubic CFF charstrings to quadratic `glyf` contours is a lossy re-drawing with its own error tolerance, and it is not what H1 describes: the extension selects the container, and `.ttf` and `.otf` are the same container. Silently producing approximated outlines because of a filename would be exactly the 'silent mangling' the corpus rejects — the user asked for a container, not a redraw. The output must remain a CFF-flavoured sfnt with no `glyf` table, and if an implementation believes the filename must be honoured, the only acceptable alternative is refusing the job, not converting.",
+      "rationale": "Converting cubic CFF charstrings to quadratic `glyf` contours is a lossy re-drawing with its own error tolerance, and it is not what H1 describes: the extension selects the container, and `.ttf` and `.otf` are the same container. Silently producing approximated outlines because of a filename would be exactly the 'silent mangling' the corpus rejects \u2014 the user asked for a container, not a redraw. The output must remain a CFF-flavoured sfnt with no `glyf` table, and if an implementation believes the filename must be honoured, the only acceptable alternative is refusing the job, not converting.",
       "fixture": "cff2-vf",
       "input": {
         "axes": {
@@ -2207,7 +2235,7 @@
       ],
       "original_lacks_feature": true,
       "class": "spec",
-      "rationale": "CFF is the format where overlap removal is not merely an optimization: the Type 2 charstring specification says that overlapping subpaths are not permitted and that outlines must be non-overlapping for correct rendering, and PostScript interpreters fill CFF outlines with the non-zero rule but were never designed for self-intersection. fontTools reflects this by removing overlaps as part of any CFF2-to-CFF downgrade, 'as CFF does not support overlaps but CFF2 does' (`varLib/instancer/__init__.py`). The invariant is the same as for glyf — the filled region must not move — but the tolerance is tighter at half a unit, because CFF charstrings store fractional coordinates and the merged path is not forced onto the integer grid (fontTools uses `noRound` for the CFF path in `ttLib/removeOverlaps.py`). **The original never removes overlaps** (G14) and is expected to fail.",
+      "rationale": "CFF is the format where overlap removal is not merely an optimization: the Type 2 charstring specification says that overlapping subpaths are not permitted and that outlines must be non-overlapping for correct rendering, and PostScript interpreters fill CFF outlines with the non-zero rule but were never designed for self-intersection. fontTools reflects this by removing overlaps as part of any CFF2-to-CFF downgrade, 'as CFF does not support overlaps but CFF2 does' (`varLib/instancer/__init__.py`). The invariant is the same as for glyf \u2014 the filled region must not move \u2014 but the tolerance is tighter at half a unit, because CFF charstrings store fractional coordinates and the merged path is not forced onto the integer grid (fontTools uses `noRound` for the CFF path in `ttLib/removeOverlaps.py`). **The original never removes overlaps** (G14) and is expected to fail.",
       "fixture": "cff2-vf",
       "input": {
         "axes": {
