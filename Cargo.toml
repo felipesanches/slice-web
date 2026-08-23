@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = ["crates/slice-core", "crates/slice-cli", "crates/slice-web"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/felipesanches/slice-web"
+rust-version = "1.82"
+
+[workspace.dependencies]
+read-fonts = "0.43"
+write-fonts = { version = "0.52", features = ["read"] }
+skrifa = "0.46"
+kurbo = "0.11"
+flo_curves = "0.8"
+thiserror = "2"
+log = "0.4"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

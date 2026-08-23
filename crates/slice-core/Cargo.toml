@@ -1,0 +1,17 @@
+[package]
+name = "slice-core"
+description = "Variable-font design-space slicing engine: axis instancing, overlap removal, name/bit-flag editing."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+read-fonts.workspace = true
+write-fonts.workspace = true
+skrifa.workspace = true
+kurbo.workspace = true
+flo_curves.workspace = true
+thiserror.workspace = true
+log.workspace = true

@@ -1,0 +1,16 @@
+[package]
+name = "slice-cli"
+description = "Command-line front end for the Slice engine (used by the test harnesses)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "slice"
+path = "src/main.rs"
+
+[dependencies]
+slice-core = { path = "../slice-core" }
+clap = { version = "4", features = ["derive"] }
