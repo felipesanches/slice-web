@@ -134,6 +134,20 @@ each `GSUB`/`GPOS` feature runs.
 Seven cases, from pinning everything to keeping two axes with one restricted. All seven
 match.
 
+`--verbose` prints each field's value rather than only the disagreements, which is how to
+read the numbers back out:
+
+```
+  ok   maxPoints                102
+  ok   headBBox                 [18, -10, 598, 562]
+  ok   usWeightClass            1000
+  ok   nameIDs                  [0, 1, 2, 3, 4, 5, 6, 269, 270, 271, 272, 273, 402, 412, 413]
+```
+
+Those are the same fields the parity review quoted — before the fixes they read 392,
+`[-275, -330, 2380, 1125]`, 300, and 153 records. Running this against an older commit
+reproduces the failures rather than leaving the reader to take the numbers on trust.
+
 This is what found the parity defects the review turned up, and it is worth keeping
 pointed at the code: it is the only check here that can see a whole class of mistake —
 "we never did that step at all" — which no amount of internal consistency testing

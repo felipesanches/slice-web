@@ -183,6 +183,14 @@ def ensure_venv() -> Path | None:
     return python
 
 
+def summarise(value) -> str:
+    """A one-line rendering of a field, short enough to scan in a column."""
+    if isinstance(value, dict):
+        return f"<{len(value)} entries>"
+    text = str(value)
+    return text if len(text) <= 70 else text[:67] + "..."
+
+
 def run_probe(python: Path, path: Path) -> dict:
     import json
     result = subprocess.run(
@@ -196,7 +204,11 @@ def main() -> int:
     import json
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--verbose", action="store_true", help="print every field")
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="print every field's value, not just the ones that differ",
+    )
     parser.add_argument("--no-build", action="store_true", help="use the existing binary")
     args = parser.parse_args()
 
@@ -241,7 +253,10 @@ def main() -> int:
             va, vb = a.get(key), b.get(key)
             if va == vb:
                 if args.verbose:
-                    print(f"  ok   {key}")
+                    # Show the value, not just that it matched. These are the numbers
+                    # the review quoted, and a harness that only prints disagreements
+                    # proves them without ever showing them.
+                    print(f"  ok   {key:24} {summarise(va)}")
                 continue
 
             if key == "tables":
