@@ -4,3 +4,4 @@
 Cargo.lock.orig
 .DS_Store
 /.fonttools-venv
+/.suite-venv
