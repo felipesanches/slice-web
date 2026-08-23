@@ -65,7 +65,7 @@ impl AxisPlan {
     pub fn output_extent(&self) -> (f64, f64, f64) {
         match self.limit {
             AxisLimit::Full => (self.spec.min, self.spec.default, self.spec.max),
-            AxisLimit::Range { min, max } => (min, self.spec.default, max),
+            AxisLimit::Range { min, max, .. } => (min, self.spec.default, max),
             // Pinned axes are not written out at all.
             AxisLimit::Pin(v) => (v, v, v),
         }
@@ -96,7 +96,7 @@ pub fn plan_axes(font: &FontRef, axes: &[AxisSpec], limits: &[AxisLimit]) -> Vec
                 // `AxisSpec::validate` enforces that before anything gets here. Clamp
                 // anyway: the solver asserts on an unsorted triple, and a panic deep in
                 // the engine is a poor way to report a caller's mistake.
-                AxisLimit::Range { min, max } => (*min, spec.default.clamp(*min, *max), *max),
+                AxisLimit::Range { min, max, .. } => (*min, spec.default.clamp(*min, *max), *max),
             };
 
             AxisPlan {
@@ -572,7 +572,7 @@ fn build_fvar(font: &FontRef, plans: &[AxisPlan]) -> Result<Fvar, SliceError> {
                         break;
                     }
                 }
-                AxisLimit::Range { min, max } => {
+                AxisLimit::Range { min, max, .. } => {
                     if value < min || value > max {
                         keep = false;
                         break;

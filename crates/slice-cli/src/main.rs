@@ -36,6 +36,9 @@ enum Command {
         /// Print every name record, not just the ones the Name Editor exposes.
         #[arg(long)]
         all_names: bool,
+        /// Emit the same information as JSON, for tools rather than people.
+        #[arg(long)]
+        json: bool,
     },
 
     /// Slice a font.
@@ -69,7 +72,7 @@ enum Command {
 fn main() -> ExitCode {
     let cli = Cli::parse();
     let result = match cli.command {
-        Command::Info { font, all_names } => info(font, all_names),
+        Command::Info { font, all_names, json } => info(font, all_names, json),
         Command::Cut {
             font,
             output,
@@ -104,8 +107,12 @@ fn load(path: &PathBuf) -> Result<SliceFont, String> {
     SliceFont::load(bytes).map_err(|e| e.to_string())
 }
 
-fn info(path: PathBuf, all_names: bool) -> Result<(), String> {
+fn info(path: PathBuf, all_names: bool, as_json: bool) -> Result<(), String> {
     let font = load(&path)?;
+
+    if as_json {
+        return info_json(&font);
+    }
 
     println!("{}", path.display());
     if let Some(family) = font.family_name() {
@@ -188,6 +195,82 @@ fn info(path: PathBuf, all_names: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// The same information as `info`, as JSON.
+///
+/// Written by hand rather than through a serialiser: the shape is small and fixed, and
+/// a debugging convenience does not justify pulling a dependency into every build.
+fn info_json(font: &SliceFont) -> Result<(), String> {
+    fn escape(text: &str) -> String {
+        let mut out = String::with_capacity(text.len() + 2);
+        for c in text.chars() {
+            match c {
+                '"' => out.push_str("\\\""),
+                '\\' => out.push_str("\\\\"),
+                '\n' => out.push_str("\\n"),
+                '\r' => out.push_str("\\r"),
+                '\t' => out.push_str("\\t"),
+                c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+                c => out.push(c),
+            }
+        }
+        out
+    }
+    fn quoted(text: &str) -> String {
+        format!("\"{}\"", escape(text))
+    }
+    fn optional(text: Option<String>) -> String {
+        text.map(|t| quoted(&t)).unwrap_or_else(|| "null".to_string())
+    }
+
+    let mut out = String::from("{");
+    out.push_str(&format!("\"glyphCount\":{},", font.glyph_count()));
+    out.push_str(&format!("\"unitsPerEm\":{},", font.units_per_em()));
+    out.push_str(&format!("\"isVariable\":{},", font.is_variable()));
+    out.push_str(&format!("\"isTrueType\":{},", font.is_truetype()));
+    out.push_str(&format!("\"familyName\":{},", optional(font.family_name())));
+    out.push_str(&format!("\"version\":{},", optional(font.version())));
+
+    out.push_str("\"axes\":[");
+    if font.is_variable() {
+        let axes = font.axes().map_err(|e| e.to_string())?;
+        for (index, axis) in axes.iter().enumerate() {
+            if index > 0 {
+                out.push(',');
+            }
+            out.push_str(&format!(
+                "{{\"tag\":{},\"min\":{},\"default\":{},\"max\":{},\"hidden\":{},\"label\":{},\"name\":{}}}",
+                quoted(&axis.tag),
+                axis.min,
+                axis.default,
+                axis.max,
+                axis.hidden,
+                quoted(&axis.range_label()),
+                optional(axis.display_name()),
+            ));
+        }
+    }
+    out.push_str("],");
+
+    out.push_str("\"names\":{");
+    let edits = font.name_edits();
+    for (index, &id) in NAME_EDITOR_IDS.iter().enumerate() {
+        if index > 0 {
+            out.push(',');
+        }
+        out.push_str(&format!("\"{}\":{}", id, quoted(edits.get_or_empty(id))));
+    }
+    out.push_str("},");
+
+    let bits = font.bit_flags();
+    out.push_str(&format!(
+        "\"fsSelection\":{},\"macStyle\":{}",
+        bits.fs_selection, bits.mac_style
+    ));
+    out.push('}');
+    println!("{out}");
+    Ok(())
+}
+
 fn write_fonts_name_id(id: u16) -> write_fonts::types::NameId {
     write_fonts::types::NameId::new(id)
 }
@@ -262,7 +345,7 @@ fn cut(
         let description = match limit {
             AxisLimit::Full => "whole original range".to_string(),
             AxisLimit::Pin(v) => format!("pinned at {}", fmt_coord(*v)),
-            AxisLimit::Range { min, max } => {
+            AxisLimit::Range { min, max, .. } => {
                 format!("restricted to {}:{}", fmt_coord(*min), fmt_coord(*max))
             }
         };

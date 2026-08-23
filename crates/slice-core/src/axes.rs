@@ -26,10 +26,27 @@ pub enum AxisLimit {
     /// A single numeric value: the axis is pinned and disappears from `fvar`.
     Pin(f64),
     /// A `min:max` range: the axis survives with a smaller extent.
-    Range { min: f64, max: f64 },
+    ///
+    /// `stated_default` carries a `[default]` group the user wrote after the range. It
+    /// is honoured only when it agrees with the axis's existing default; moving a
+    /// default is Level 4 sub-spacing, which is not implemented.
+    Range {
+        min: f64,
+        max: f64,
+        stated_default: Option<f64>,
+    },
 }
 
 impl AxisLimit {
+    /// A range with no `[default]` group, which is the ordinary case.
+    pub const fn range(min: f64, max: f64) -> Self {
+        AxisLimit::Range {
+            min,
+            max,
+            stated_default: None,
+        }
+    }
+
     /// True when this limit leaves the axis present in the output `fvar`.
     pub fn keeps_axis(&self) -> bool {
         !matches!(self, AxisLimit::Pin(_))
@@ -46,7 +63,7 @@ impl fmt::Display for AxisLimit {
         match self {
             AxisLimit::Full => Ok(()),
             AxisLimit::Pin(v) => write!(f, "{v}"),
-            AxisLimit::Range { min, max } => write!(f, "{min}:{max}"),
+            AxisLimit::Range { min, max, .. } => write!(f, "{min}:{max}"),
         }
     }
 }
@@ -91,49 +108,119 @@ pub fn parse_axis_limit(input: &str, axis_tag: &str) -> Result<AxisLimit, SliceE
         None => (rest, None),
     };
 
-    let start = parse_number(start_text.trim()).ok_or_else(|| SliceError::AxisValue {
-        value: start_text.trim().to_string(),
+    let start = parse_range_bound(start_text).ok_or_else(|| SliceError::AxisRange {
+        value: text.to_string(),
         axis: axis_tag.to_string(),
     })?;
-    let end = parse_number(end_text.trim()).ok_or_else(|| SliceError::AxisValue {
-        value: end_text.trim().to_string(),
+    let end = parse_range_bound(end_text).ok_or_else(|| SliceError::AxisRange {
+        value: text.to_string(),
         axis: axis_tag.to_string(),
     })?;
 
-    if explicit_default.is_some() {
-        return Err(SliceError::DefaultMoveUnsupported {
+    // A `[default]` group is carried through rather than refused here. Whether it can be
+    // honoured depends on the axis, which parsing does not know about, so that decision
+    // belongs in `AxisSpec::validate`.
+    let stated_default = match explicit_default {
+        Some(raw) => Some(parse_range_bound(&raw).ok_or_else(|| SliceError::AxisRange {
+            value: text.to_string(),
             axis: axis_tag.to_string(),
-        });
-    }
+        })?),
+        None => None,
+    };
 
     // Slice sorts the pair, so `800:400` means the same as `400:800`.
-    let (min, max) = if start <= end {
-        (start, end)
-    } else {
-        (end, start)
-    };
-    Ok(AxisLimit::Range { min, max })
+    let (min, max) = if start <= end { (start, end) } else { (end, start) };
+
+    // `400:400` names one coordinate, not a span. An fvar axis whose min, default and
+    // max all coincide varies over nothing, so this is a pin however it was spelled.
+    if min == max {
+        if let Some(stated) = stated_default {
+            if stated != min {
+                return Err(SliceError::AxisRange {
+                    value: text.to_string(),
+                    axis: axis_tag.to_string(),
+                });
+            }
+        }
+        return Ok(AxisLimit::Pin(min));
+    }
+
+    Ok(AxisLimit::Range {
+        min,
+        max,
+        stated_default,
+    })
 }
 
-/// Accept exactly what Slice's regular expression accepts: an optionally signed decimal
-/// number. Notably this rejects `1e3`, `inf` and `NaN`, all of which `str::parse::<f64>`
-/// would happily take and none of which are meaningful axis coordinates.
+/// A decimal number, optionally signed, optionally with an exponent.
+///
+/// Used for a pinned value. An exponent is allowed because `1e3` denotes 1000
+/// unambiguously and is exactly representable in the `Fixed` 16.16 format axis
+/// coordinates are stored in, so there is nothing to gain by refusing it.
+///
+/// `nan`, `inf` and `1_000` are rejected, which `str::parse::<f64>` alone would not do.
+/// The first two have no representation in `Fixed` at all, so no such coordinate can
+/// ever be written to a font; the third is Python and Rust literal syntax leaking into
+/// a text field, and reading it as 1000 would be a guess.
 fn parse_number(text: &str) -> Option<f64> {
+    parse_decimal(text, true)
+}
+
+/// A decimal number with no exponent.
+///
+/// Used for the bounds of a range, whose grammar in the original is a regular
+/// expression with no production for an exponent. Keeping that difference is
+/// deliberate: `300:1e3` in the original matches only `300:1`, sorts to `1:300`, and
+/// collapses the axis away entirely, so the safe reading of an exponent here is that
+/// the user has typed something the range syntax does not cover.
+fn parse_range_bound(text: &str) -> Option<f64> {
+    parse_decimal(text, false)
+}
+
+fn parse_decimal(text: &str, allow_exponent: bool) -> Option<f64> {
+    let text = text.trim();
     if text.is_empty() {
         return None;
     }
-    let body = text.strip_prefix('-').unwrap_or(text);
-    let mut parts = body.splitn(2, '.');
-    let int_part = parts.next()?;
-    if int_part.is_empty() || !int_part.bytes().all(|b| b.is_ascii_digit()) {
+
+    let (mantissa, exponent) = match text.find(['e', 'E']) {
+        Some(at) if allow_exponent => (&text[..at], Some(&text[at + 1..])),
+        Some(_) => return None,
+        None => (text, None),
+    };
+
+    if !is_plain_decimal(mantissa) {
         return None;
     }
-    if let Some(frac) = parts.next() {
-        if frac.is_empty() || !frac.bytes().all(|b| b.is_ascii_digit()) {
+    if let Some(exponent) = exponent {
+        let digits = exponent
+            .strip_prefix(['+', '-'])
+            .unwrap_or(exponent);
+        if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
             return None;
         }
     }
-    text.parse::<f64>().ok()
+
+    let value = text.parse::<f64>().ok()?;
+    // Belt and braces: the grammar above already excludes them, but a coordinate that
+    // is not finite must never reach the solver.
+    value.is_finite().then_some(value)
+}
+
+/// `123`, `-1.5`, `.5` or `2.` — digits with at most one decimal point and no other
+/// characters at all, which is what excludes `1_000` and `nan`.
+fn is_plain_decimal(text: &str) -> bool {
+    let body = text.strip_prefix(['+', '-']).unwrap_or(text);
+    if body.is_empty() {
+        return false;
+    }
+    let mut parts = body.splitn(2, '.');
+    let integer = parts.next().unwrap_or("");
+    let fraction = parts.next().unwrap_or("");
+    if integer.is_empty() && fraction.is_empty() {
+        return false;
+    }
+    integer.bytes().all(|b| b.is_ascii_digit()) && fraction.bytes().all(|b| b.is_ascii_digit())
 }
 
 /// One axis as the font declares it in `fvar`.
@@ -185,18 +272,25 @@ impl AxisSpec {
                 }
                 Ok(limit)
             }
-            AxisLimit::Range { min, max } => {
-                if min < self.min || max > self.max {
-                    return Err(SliceError::AxisRangeOutOfRange {
-                        axis: self.tag.clone(),
-                        min,
-                        max,
-                        axis_min: self.min,
-                        axis_max: self.max,
-                    });
+            AxisLimit::Range {
+                min,
+                max,
+                stated_default,
+            } => {
+                // A stated default that agrees with the axis is a description of what
+                // is already true, so it costs nothing to honour. One that disagrees is
+                // Level 4 sub-spacing, which needs the default location moved.
+                if let Some(stated) = stated_default {
+                    if stated != self.default {
+                        return Err(SliceError::DefaultMoveUnsupported {
+                            axis: self.tag.clone(),
+                        });
+                    }
                 }
-                // Level 3 sub-spacing: the compiler cannot move the default axis
-                // location, so a restricted range has to contain it.
+
+                // Judged as typed, before any clamping. A range that excludes the
+                // default cannot be compiled at all (Level 3), and saying so is more
+                // use than reporting the extent it also happens to overshoot.
                 if self.default < min || self.default > max {
                     return Err(SliceError::DefaultOutsideRange {
                         axis: self.tag.clone(),
@@ -205,7 +299,34 @@ impl AxisSpec {
                         default: self.default,
                     });
                 }
-                Ok(limit)
+
+                // A restriction is an intersection with the design space the font
+                // already has, so overshooting its edge asks for nothing the user does
+                // not get. Contrast a pin, above, which is an assertion that a location
+                // exists and is refused when it does not.
+                let min = min.max(self.min);
+                let max = max.min(self.max);
+
+                // An axis admitting exactly one coordinate is not an axis; it is a pin,
+                // and writing it out would leave variation data that can never vary.
+                if min == max {
+                    return Ok(AxisLimit::Pin(min));
+                }
+
+                // A range that survives clamping unchanged asks for the axis the font
+                // already has. Reporting it as `Full` keeps the "did the user actually
+                // restrict anything?" question answerable by inspection.
+                if min == self.min && max == self.max {
+                    return Ok(AxisLimit::Full);
+                }
+
+                // The stated default has now been checked against this axis and agreed
+                // with it; dropping it here stops it being re-judged downstream.
+                Ok(AxisLimit::Range {
+                    min,
+                    max,
+                    stated_default: None,
+                })
             }
         }
     }
@@ -290,17 +411,11 @@ mod tests {
     fn colon_pair_restricts_the_axis() {
         assert_eq!(
             parse_axis_limit("200:700", "wght").unwrap(),
-            AxisLimit::Range {
-                min: 200.0,
-                max: 700.0
-            }
+            AxisLimit::range(200.0, 700.0)
         );
         assert_eq!(
             parse_axis_limit(" 200 : 700 ", "wght").unwrap(),
-            AxisLimit::Range {
-                min: 200.0,
-                max: 700.0
-            }
+            AxisLimit::range(200.0, 700.0)
         );
     }
 
@@ -308,16 +423,13 @@ mod tests {
     fn reversed_range_is_sorted_like_the_original() {
         assert_eq!(
             parse_axis_limit("800:400", "wght").unwrap(),
-            AxisLimit::Range {
-                min: 400.0,
-                max: 800.0
-            }
+            AxisLimit::range(400.0, 800.0)
         );
     }
 
     #[test]
     fn non_numeric_entry_is_rejected() {
-        for bad in ["abc", "40o", "1e3", "NaN", "inf", "4..0", "."] {
+        for bad in ["abc", "40o", "NaN", "inf", "-inf", "4..0", "."] {
             assert!(
                 parse_axis_limit(bad, "wght").is_err(),
                 "{bad:?} should not parse"
@@ -326,8 +438,64 @@ mod tests {
     }
 
     #[test]
-    fn explicit_default_is_rejected_rather_than_silently_dropped() {
-        let err = parse_axis_limit("200:700[400]", "wght").unwrap_err();
+    fn scientific_notation_is_a_number_like_any_other() {
+        // A pin is a single float, and `1e3` is how a great many tools -- Python's
+        // float(), strtod, JSON -- spell one thousand. Refusing it would be refusing a
+        // value the user can legitimately mean, so it pins at 1000.
+        assert_eq!(
+            parse_axis_limit("1e3", "wght").unwrap(),
+            AxisLimit::Pin(1000.0)
+        );
+        assert_eq!(
+            parse_axis_limit("3.5E2", "wght").unwrap(),
+            AxisLimit::Pin(350.0)
+        );
+    }
+
+    #[test]
+    fn exponents_are_not_allowed_inside_a_range() {
+        // `300:1e3` reads as a range only if `e` cannot also start an exponent; the
+        // colon form is a pair of plain decimals, so this is a typo, not a range.
+        assert!(parse_axis_limit("300:1e3", "wght").is_err());
+    }
+
+    #[test]
+    fn a_degenerate_range_is_a_pin() {
+        // `400:400` asks for a range of zero width. That is a location, and an fvar
+        // axis whose min, default and max coincide is not a meaningful axis.
+        assert_eq!(
+            parse_axis_limit("400:400", "wght").unwrap(),
+            AxisLimit::Pin(400.0)
+        );
+        assert_eq!(parse_axis_limit("0:0", "slnt").unwrap(), AxisLimit::Pin(0.0));
+    }
+
+    #[test]
+    fn a_stated_default_that_agrees_with_the_font_is_accepted() {
+        // fonttools' `min:max[default]` syntax lets the caller restate the default. When
+        // the value restated is the one the font already has, nothing is being asked for
+        // beyond the range itself, so honour it rather than refusing a no-op.
+        let a = axis(); // wght 300 / 300 / 1000
+        let limit = parse_axis_limit("300:700[300]", "wght").unwrap();
+        assert_eq!(
+            limit,
+            AxisLimit::Range {
+                min: 300.0,
+                max: 700.0,
+                stated_default: Some(300.0),
+            }
+        );
+        assert_eq!(a.validate(limit).unwrap(), AxisLimit::range(300.0, 700.0));
+    }
+
+    #[test]
+    fn a_stated_default_that_differs_is_refused_rather_than_silently_dropped() {
+        // Moving the default is a real feature (fonttools implements it by rebuilding
+        // every tuple around the new origin) and this program does not have it. Dropping
+        // the bracket silently would hand back a font that is not what was asked for.
+        let a = axis();
+        let limit = parse_axis_limit("300:700[500]", "wght").unwrap();
+        let err = a.validate(limit).unwrap_err();
         assert!(
             matches!(err, SliceError::DefaultMoveUnsupported { .. }),
             "got {err:?}"
@@ -339,10 +507,7 @@ mod tests {
         let a = axis();
         // wght default is 300, so a 400:700 range cannot be compiled.
         let err = a
-            .validate(AxisLimit::Range {
-                min: 400.0,
-                max: 700.0,
-            })
+            .validate(AxisLimit::range(400.0, 700.0))
             .unwrap_err();
         assert!(
             matches!(err, SliceError::DefaultOutsideRange { .. }),
@@ -351,25 +516,46 @@ mod tests {
 
         // A range that does contain it is fine.
         assert!(a
-            .validate(AxisLimit::Range {
-                min: 300.0,
-                max: 700.0
-            })
+            .validate(AxisLimit::range(300.0, 700.0))
             .is_ok());
     }
 
     #[test]
-    fn limits_must_stay_inside_the_original_extent() {
+    fn a_pin_outside_the_original_extent_is_refused() {
+        // A pin is an assertion about where the instance sits. Asking for wght=1200 on an
+        // axis that stops at 1000 cannot be honoured, and quietly substituting 1000 would
+        // produce a font whose weight is not the one requested.
         let a = axis();
         assert!(a.validate(AxisLimit::Pin(1200.0)).is_err());
         assert!(a.validate(AxisLimit::Pin(100.0)).is_err());
-        assert!(a
-            .validate(AxisLimit::Range {
-                min: 100.0,
-                max: 700.0
-            })
-            .is_err());
         assert!(a.validate(AxisLimit::Pin(1000.0)).is_ok());
+    }
+
+    #[test]
+    fn a_range_overshooting_the_extent_is_clamped_to_it() {
+        // A range is an intersection, not an assertion: "keep wght between 100 and 700"
+        // is fully satisfiable on a 300..1000 axis by keeping 300..700. fonttools'
+        // instancer clamps exactly this way, and refusing would make the common idiom of
+        // typing `0:700` to mean "everything up to 700" an error.
+        let a = axis();
+        assert_eq!(
+            a.validate(AxisLimit::range(100.0, 700.0)).unwrap(),
+            AxisLimit::range(300.0, 700.0)
+        );
+        assert_eq!(
+            a.validate(AxisLimit::range(100.0, 5000.0)).unwrap(),
+            AxisLimit::Full
+        );
+    }
+
+    #[test]
+    fn a_range_clamped_down_to_a_single_point_becomes_a_pin() {
+        // wght starts at 300, so `0:300` leaves exactly one reachable location.
+        let a = axis();
+        assert_eq!(
+            a.validate(AxisLimit::range(0.0, 300.0)).unwrap(),
+            AxisLimit::Pin(300.0)
+        );
     }
 
     #[test]

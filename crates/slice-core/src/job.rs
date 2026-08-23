@@ -130,10 +130,16 @@ impl SliceJob {
             validated.push((axis, axis.validate(*limit)?));
         }
 
-        // The original refuses to run when the request is the whole original design
-        // space, on the grounds that the output would just be a copy of the input.
-        // Removing overlaps is a real change, so it lifts that objection.
-        let changes_design_space = validated.iter().any(|(_, l)| l.is_restriction());
+        // The original refuses to run when no axis cell was filled in, on the grounds
+        // that the output would just be a copy of the input. Removing overlaps is a real
+        // change, so it lifts that objection.
+        //
+        // The question is asked of the limits as typed, not as validated. A range can
+        // clamp to the axis's own extent -- `100:900` on a 300..1000 axis -- and judging
+        // the clamped result would refuse that while accepting the equivalent `300:900`,
+        // a distinction the user has no way to predict. A no-op slice is also not a
+        // no-op internally: the instancer still runs its optimizations over the font.
+        let changes_design_space = self.limits.iter().any(|l| l.is_restriction());
         if !changes_design_space && !self.remove_overlaps {
             return Err(SliceError::NothingToDo);
         }
@@ -167,7 +173,7 @@ impl SliceJob {
             .map(|(axis, limit)| {
                 let value = match limit {
                     AxisLimit::Pin(v) => *v,
-                    AxisLimit::Range { min, max } => axis.default.clamp(*min, *max),
+                    AxisLimit::Range { min, max, .. } => axis.default.clamp(*min, *max),
                     AxisLimit::Full => axis.default,
                 };
                 (axis.tag.clone(), value)
@@ -438,10 +444,7 @@ mod tests {
     fn restricting_one_axis_keeps_the_font_variable() {
         let font = font();
         let mut job = pin_all(&font);
-        job.limits[2] = AxisLimit::Range {
-            min: 300.0,
-            max: 700.0,
-        };
+        job.limits[2] = AxisLimit::range(300.0, 700.0);
         let output = job.run(&font).unwrap();
 
         let result = SliceFont::load(output.bytes).unwrap();

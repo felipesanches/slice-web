@@ -106,6 +106,7 @@ fn cases() -> Vec<Case> {
                     AxisLimit::Range {
                         min: 300.0,
                         max: 700.0,
+                        stated_default: None,
                     },
                 ),
             ],
@@ -131,6 +132,7 @@ fn cases() -> Vec<Case> {
                     AxisLimit::Range {
                         min: 300.0,
                         max: 900.0,
+                        stated_default: None,
                     },
                 ),
             ],
@@ -151,6 +153,7 @@ fn cases() -> Vec<Case> {
                     AxisLimit::Range {
                         min: 300.0,
                         max: 800.0,
+                        stated_default: None,
                     },
                 ),
             ],
