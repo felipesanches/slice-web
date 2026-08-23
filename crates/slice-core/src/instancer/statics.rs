@@ -20,8 +20,10 @@ use crate::SliceError;
 /// Tables that describe variation and therefore have no place in a static instance.
 ///
 /// `cvar` and the metric variation tables go because there is nothing left to vary.
-/// `STAT` goes with `fvar`: what remains would describe axes the font no longer has, and
-/// a stale `STAT` is worse than none.
+///
+/// `STAT` is *not* here. A static instance keeps it, with its axis values filtered to
+/// the pinned location: that is how the instance declares "this is Casual 1, Weight
+/// 1000" to a font menu, and fontTools keeps it for the same reason.
 pub const VARIATION_TABLES: &[Tag] = &[
     Tag::new(b"fvar"),
     Tag::new(b"avar"),
@@ -30,10 +32,12 @@ pub const VARIATION_TABLES: &[Tag] = &[
     Tag::new(b"HVAR"),
     Tag::new(b"VVAR"),
     Tag::new(b"MVAR"),
-    Tag::new(b"STAT"),
 ];
 
 /// Build a static instance of `font` at `location`.
+///
+/// `plans` describes the same request in user space, and is needed to filter `STAT`:
+/// an axis value naming a weight the instance is not pinned at has to go.
 ///
 /// The returned bytes are a complete sfnt. Name records and bit flags are *not* applied
 /// here; the caller does that afterwards, so that the same code path serves the partial
@@ -41,6 +45,7 @@ pub const VARIATION_TABLES: &[Tag] = &[
 pub fn instantiate_static(
     font: &FontRef,
     location: &NormalizedLocation,
+    plans: &[super::partial::AxisPlan],
 ) -> Result<Vec<u8>, SliceError> {
     if font.glyf().is_err() {
         return Err(SliceError::Unsupported(
@@ -67,7 +72,21 @@ pub fn instantiate_static(
         phantom_x.push((phantoms[0].0, phantoms[1].0));
         is_composite[gid.to_u32() as usize] = matches!(points.shape, GlyphShape::Composite { .. });
 
-        shapes.push(build_glyph(&points));
+        let mut glyph = build_glyph(&points);
+        // A static instance may still have overlapping contours, and the flags that say
+        // so are the only hint a rasteriser gets. fontTools sets them here too, under
+        // its default OverlapMode::KEEP_AND_SET_FLAGS, which is what the original Slice
+        // ran with. If overlaps are removed later, that pass clears them again.
+        match &mut glyph {
+            WGlyph::Simple(simple) => simple.overlaps = true,
+            WGlyph::Composite(composite) => {
+                if let Some(first) = composite.components_mut().first_mut() {
+                    first.flags.overlap_compound = true;
+                }
+            }
+            WGlyph::Empty => {}
+        }
+        shapes.push(glyph);
     }
 
     // Pass two: a composite's bounding box depends on the glyphs it references, so it can
@@ -138,6 +157,13 @@ pub fn instantiate_static(
             out.add_table(&hhea)
                 .map_err(|e| SliceError::Write(e.to_string()))?;
         }
+    }
+
+    // STAT survives, with the axis values the pinned location can no longer reach
+    // removed. See `partial::build_stat`.
+    if let Some(stat) = super::partial::build_stat(font, plans)? {
+        out.add_table(&stat)
+            .map_err(|e| SliceError::Write(e.to_string()))?;
     }
 
     // Everything else is copied across verbatim, minus the variation tables.

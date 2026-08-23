@@ -9,6 +9,7 @@ something that is already in the tree.
 | `gen-solver-vectors.py` | Does our sub-space solver agree with fontTools' on every case fontTools tests? |
 | `browser-smoke.sh` | Does the application start in a real browser and read a font through it? |
 | `browser-slice-test.py` | If someone fills in the editors and presses Slice, do they get the font they asked for? |
+| `compare-with-fonttools.py` | Does slicing a font here give the same font the original Slice would have given? |
 
 Two more live as cargo examples next to the code they debug, rather than here:
 
@@ -108,3 +109,36 @@ The DevTools client is about a hundred lines of socket code rather than a depend
 That is a deliberate trade: this repository needs nothing but a Rust toolchain and a
 browser, and keeping it that way is worth more than the lines saved. Like the smoke test,
 it exits 0 with a message when no browser is on PATH.
+
+## `compare-with-fonttools.py`
+
+The original Slice is a thin interface over `fontTools.varLib.instancer`. So the sharpest
+parity test available is not to describe the original's behaviour and check against the
+description — it is to run the actual library, on the same input, with the same request,
+and diff the results.
+
+```sh
+tools/compare-with-fonttools.py            # build, set up the venv, compare
+tools/compare-with-fonttools.py --verbose  # print every field, not just differences
+```
+
+It installs the exact fontTools release the sub-space solver was ported from into
+`.fonttools-venv/`, calls `instantiateVariableFont` the way `InstanceWorker` does
+(`inplace=True, optimize=True`, default overlap mode), runs `slice cut` with the same
+settings, and compares both fonts field by field: every glyph's outline as recorded pen
+output, every advance, `maxp`, the `head` bounding box and flags, `hhea`'s extremes,
+`OS/2`'s weight class, width class and average width, `post.italicAngle`, the set of
+name IDs, the `fvar` axes and instance count, `STAT`'s axes and values, and which lookups
+each `GSUB`/`GPOS` feature runs.
+
+Seven cases, from pinning everything to keeping two axes with one restricted. All seven
+match.
+
+This is what found the parity defects the review turned up, and it is worth keeping
+pointed at the code: it is the only check here that can see a whole class of mistake —
+"we never did that step at all" — which no amount of internal consistency testing
+reaches. Two differences are allowlisted in `ACCEPTED` and explained in the script's
+docstring; both are size rather than behaviour.
+
+It needs network access the first time. Like the other browser and environment scripts,
+it exits 0 with a message when it cannot prepare its environment.

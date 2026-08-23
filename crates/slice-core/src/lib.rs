@@ -15,6 +15,7 @@
 
 pub mod axes;
 pub mod bits;
+pub mod finalize;
 pub mod font;
 pub mod instancer;
 pub mod job;

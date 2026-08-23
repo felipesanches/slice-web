@@ -42,3 +42,17 @@ jobs:
         with:
           name: slice-web
           path: dist/
+
+  parity:
+    name: Parity with fontTools
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Runs the real fontTools on the same inputs and diffs the results, which is the
+      # only check here that can catch a step being skipped altogether.
+      - run: tools/compare-with-fonttools.py

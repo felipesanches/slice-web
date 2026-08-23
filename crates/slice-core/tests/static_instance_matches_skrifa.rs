@@ -24,7 +24,8 @@ use skrifa::outline::{DrawSettings, OutlinePen};
 use skrifa::prelude::*;
 use skrifa::{FontRef, MetadataProvider};
 
-use slice_core::instancer::{instantiate_static, normalize_location};
+use slice_core::axes::AxisLimit;
+use slice_core::instancer::{instantiate_static, normalize_location, plan_axes};
 use slice_core::SliceFont;
 
 const RECURSIVE_VF: &[u8] = include_bytes!("../../../testdata/fonts/Recursive-VF.subset.ttf");
@@ -144,8 +145,10 @@ fn instance_at(user: &[(&str, f64)]) -> Vec<u8> {
         })
         .collect();
 
+    let limits: Vec<AxisLimit> = coords.iter().map(|v| AxisLimit::Pin(*v)).collect();
     let location = normalize_location(&font, &axes, &coords);
-    instantiate_static(&font, &location).expect("instancing should succeed")
+    let plans = plan_axes(&font, &axes, &limits);
+    instantiate_static(&font, &location, &plans).expect("instancing should succeed")
 }
 
 /// Every location worth checking: the default, each axis at each end, and a couple of

@@ -709,12 +709,15 @@ fn identity_segment_map() -> Vec<AxisValueMap> {
         .collect()
 }
 
-/// Rebuild `STAT` without the pinned axes.
+/// Filter `STAT`'s axis values to those the output can still reach.
 ///
-/// A variable font is required to have `STAT`, so it cannot simply be dropped; but its
-/// design axis records are referenced by index from the axis value tables, so removing
-/// one means renumbering the rest.
-fn build_stat(
+/// fontTools keeps every design axis record, including the pinned ones, and drops only
+/// the axis *values* that fall outside the new limits. That is deliberate and worth
+/// copying: a static instance's `STAT` is how it declares "this is Casual 1, Weight
+/// 1000", and stripping the pinned axes would throw exactly that away. An earlier
+/// version here removed them and had to renumber every axis value's index, which was
+/// both more code and wrong.
+pub fn build_stat(
     font: &FontRef,
     plans: &[AxisPlan],
 ) -> Result<Option<write_fonts::tables::stat::Stat>, SliceError> {
@@ -723,119 +726,110 @@ fn build_stat(
     let Ok(source) = font.stat() else {
         return Ok(None);
     };
-
-    // STAT lists design axes in its own order, which need not match fvar's.
-    let dropped: Vec<Tag> = plans
-        .iter()
-        .filter(|plan| plan.is_pinned())
-        .filter_map(|plan| Tag::new_checked(plan.spec.tag.as_bytes()).ok())
-        .collect();
-
     let Ok(design_axes) = source.design_axes() else {
         return Ok(None);
     };
 
-    let mut records = Vec::new();
-    // Old STAT axis index -> new index, or None when the axis is going away.
-    let mut remap: Vec<Option<u16>> = Vec::new();
-    for axis in design_axes.iter() {
-        if dropped.contains(&axis.axis_tag()) {
-            remap.push(None);
-        } else {
-            remap.push(Some(records.len() as u16));
-            records.push(wstat::AxisRecord {
-                axis_tag: axis.axis_tag(),
-                axis_name_id: axis.axis_name_id(),
-                axis_ordering: axis.axis_ordering(),
-            });
-        }
-    }
-
+    let records: Vec<wstat::AxisRecord> = design_axes
+        .iter()
+        .map(|axis| wstat::AxisRecord {
+            axis_tag: axis.axis_tag(),
+            axis_name_id: axis.axis_name_id(),
+            axis_ordering: axis.axis_ordering(),
+        })
+        .collect();
     if records.is_empty() {
-        // Every axis STAT described is gone; the caller is producing something with no
-        // axes left for it to describe.
         return Ok(None);
     }
 
+    // The extent each axis ends up with, by tag, for testing axis values against.
+    let extent = |tag: Tag| -> Option<(f64, f64)> {
+        plans.iter().find_map(|plan| {
+            if Tag::new_checked(plan.spec.tag.as_bytes()).ok()? == tag {
+                let (min, _, max) = plan.output_extent();
+                Some((min, max))
+            } else {
+                None
+            }
+        })
+    };
+    let outside = |axis_index: u16, value: f64| -> bool {
+        let Some(axis) = design_axes.get(axis_index as usize) else {
+            return false;
+        };
+        match extent(axis.axis_tag()) {
+            Some((min, max)) => value < min || value > max,
+            // An axis STAT describes that fvar never had is left alone.
+            None => false,
+        }
+    };
+
     let mut values: Vec<wstat::AxisValue> = Vec::new();
     if let Some(Ok(subtables)) = source.offset_to_axis_values() {
-        for subtable in subtables.axis_values().iter() {
-            let Ok(subtable) = subtable else { continue };
-            if let Some(value) = remap_axis_value(&subtable, &remap) {
+        for subtable in subtables.axis_values().iter().flatten() {
+            if let Some(value) = keep_axis_value(&subtable, &outside) {
                 values.push(value);
             }
         }
     }
 
-    // A missing elidedFallbackNameID means STAT version 1.0, which predates the field;
-    // nameID 2 (Subfamily) is the conventional stand-in.
     let fallback = source
         .elided_fallback_name_id()
+        // A missing elidedFallbackNameID means STAT 1.0, which predates the field;
+        // nameID 2 (Subfamily) is the conventional stand-in.
         .unwrap_or(write_fonts::types::NameId::new(2));
     Ok(Some(wstat::Stat::new(records, values, fallback)))
 }
 
-/// Renumber one STAT axis value, or drop it if it refers to an axis that is going away.
-fn remap_axis_value(
+/// Copy one STAT axis value across, unless the location it names is out of reach.
+fn keep_axis_value(
     value: &read_fonts::tables::stat::AxisValue,
-    remap: &[Option<u16>],
+    outside: &dyn Fn(u16, f64) -> bool,
 ) -> Option<write_fonts::tables::stat::AxisValue> {
     use read_fonts::tables::stat::AxisValue as R;
     use write_fonts::tables::stat as w;
 
-    let index_of = |old: u16| -> Option<u16> { *remap.get(old as usize)? };
-
     match value {
-        R::Format1(v) => {
-            let index = index_of(v.axis_index())?;
-            Some(w::AxisValue::format_1(
-                index,
-                v.flags(),
-                v.value_name_id(),
-                v.value(),
-            ))
-        }
-        R::Format2(v) => {
-            let index = index_of(v.axis_index())?;
-            Some(w::AxisValue::format_2(
-                index,
+        R::Format1(v) => (!outside(v.axis_index(), v.value().to_f64())).then(|| {
+            w::AxisValue::format_1(v.axis_index(), v.flags(), v.value_name_id(), v.value())
+        }),
+        R::Format2(v) => (!outside(v.axis_index(), v.nominal_value().to_f64())).then(|| {
+            w::AxisValue::format_2(
+                v.axis_index(),
                 v.flags(),
                 v.value_name_id(),
                 v.nominal_value(),
                 v.range_min_value(),
                 v.range_max_value(),
-            ))
-        }
-        R::Format3(v) => {
-            let index = index_of(v.axis_index())?;
-            Some(w::AxisValue::format_3(
-                index,
+            )
+        }),
+        R::Format3(v) => (!outside(v.axis_index(), v.value().to_f64())).then(|| {
+            w::AxisValue::format_3(
+                v.axis_index(),
                 v.flags(),
                 v.value_name_id(),
                 v.value(),
                 v.linked_value(),
-            ))
-        }
+            )
+        }),
         R::Format4(v) => {
-            // A format 4 record names a point in several axes at once. If any of them is
-            // going away the record no longer describes a reachable location, so it goes
-            // too rather than being silently reduced to something else.
-            let mut records = Vec::new();
-            for record in v.axis_values() {
-                let index = index_of(record.axis_index())?;
-                records.push(w::AxisValueRecord {
-                    axis_index: index,
-                    value: record.value(),
-                });
-            }
-            if records.is_empty() {
-                return None;
-            }
-            Some(w::AxisValue::format_4(
-                v.flags(),
-                v.value_name_id(),
-                records,
-            ))
+            // A format 4 record names one point across several axes at once. If any of
+            // them is out of reach the record no longer describes a location the font
+            // has, so the whole record goes rather than being quietly reduced.
+            let records: Vec<w::AxisValueRecord> = v
+                .axis_values()
+                .iter()
+                .map(|rec| w::AxisValueRecord {
+                    axis_index: rec.axis_index(),
+                    value: rec.value(),
+                })
+                .collect();
+            let any_outside = v
+                .axis_values()
+                .iter()
+                .any(|rec| outside(rec.axis_index(), rec.value().to_f64()));
+            (!any_outside && !records.is_empty())
+                .then(|| w::AxisValue::format_4(v.flags(), v.value_name_id(), records))
         }
     }
 }

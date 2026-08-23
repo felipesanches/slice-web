@@ -9,8 +9,12 @@ use write_fonts::{from_obj::ToOwnedTable, FontBuilder};
 
 use crate::axes::{AxisLimit, AxisSpec};
 use crate::bits::BitFlags;
+use crate::finalize::{finalize, variation_name_ids, Finalize};
 use crate::font::{SliceFont, WIN_ENCODING, WIN_LANGUAGE, WIN_PLATFORM};
-use crate::instancer::{instantiate_partial, instantiate_static, normalize_location, plan_axes};
+use crate::instancer::{
+    instantiate_feature_variations, instantiate_partial, instantiate_static, normalize_location,
+    plan_axes,
+};
 use crate::names::NameEdits;
 use crate::overlaps::{remove_overlaps, OverlapReport};
 use crate::SliceError;
@@ -150,6 +154,26 @@ impl SliceJob {
 
         let font_ref = font.font_ref()?;
 
+        // Which name records the input's fvar and STAT referred to. Anything in here
+        // that the output no longer refers to is pruned at the end; collecting it now
+        // is the only chance, since fvar is about to be rewritten or dropped.
+        let names_before = variation_name_ids(&font_ref);
+
+        // The location the output sits at, in user space, for OS/2's weight and width
+        // classes and post's italic angle. A pinned axis contributes its pin; anything
+        // still variable contributes the default it will open at.
+        let final_location: Vec<(String, f64)> = validated
+            .iter()
+            .map(|(axis, limit)| {
+                let value = match limit {
+                    AxisLimit::Pin(v) => *v,
+                    AxisLimit::Range { min, max } => axis.default.clamp(*min, *max),
+                    AxisLimit::Full => axis.default,
+                };
+                (axis.tag.clone(), value)
+            })
+            .collect();
+
         // Instancing.
         let mut bytes = if self.is_fully_pinned() {
             let user: Vec<f64> = validated
@@ -160,6 +184,8 @@ impl SliceJob {
                 })
                 .collect();
             let location = normalize_location(&font_ref, &axes, &user);
+            let limits: Vec<AxisLimit> = validated.iter().map(|(_, l)| *l).collect();
+            let plans = plan_axes(&font_ref, &axes, &limits);
             notes.push(format!(
                 "Pinned {}",
                 validated
@@ -168,7 +194,7 @@ impl SliceJob {
                     .collect::<Vec<_>>()
                     .join(" ")
             ));
-            instantiate_static(&font_ref, &location)?
+            instantiate_static(&font_ref, &location, &plans)?
         } else if validated.iter().any(|(_, l)| l.is_restriction()) {
             let limits: Vec<AxisLimit> = validated.iter().map(|(_, l)| *l).collect();
             let plans = plan_axes(&font_ref, &axes, &limits);
@@ -194,6 +220,39 @@ impl SliceJob {
             font.data().to_vec()
         };
 
+        // Variable positioning is the one piece of variation data still carried through
+        // untouched. For a static instance that means kerning and anchors come out at
+        // the default master's values rather than the pinned location's, which is a
+        // quiet difference worth saying out loud rather than letting someone discover.
+        if font_ref
+            .gdef()
+            .map(|gdef| gdef.item_var_store().is_some())
+            .unwrap_or(false)
+        {
+            notes.push(
+                "Note: this font has variable kerning or anchors (a GDEF item variation \
+                 store), which this build does not apply. Positioning comes out at the \
+                 default location."
+                    .to_string(),
+            );
+        }
+
+        // Feature variations describe substitutions by axis position, so they have to
+        // be resolved against the new design space before anything downstream can rely
+        // on the font's shaping behaviour.
+        {
+            let plans = plan_axes(
+                &font_ref,
+                &axes,
+                &validated.iter().map(|(_, l)| *l).collect::<Vec<_>>(),
+            );
+            let resolved = instantiate_feature_variations(&bytes, &plans)?;
+            if resolved.len() != bytes.len() {
+                notes.push("Resolved feature variations".to_string());
+            }
+            bytes = resolved;
+        }
+
         // Overlap removal, which needs the outlines to have stopped moving.
         let mut overlap_report = None;
         if self.remove_overlaps {
@@ -207,6 +266,18 @@ impl SliceJob {
         bytes = apply_names(&bytes, &self.names)?;
         bytes = apply_bits(&bytes, self.bits)?;
         notes.push("Applied name records and bit flags".to_string());
+
+        // Everything that depends on the final outlines: maxp, the head bounding box,
+        // hhea's extremes, OS/2's average width and weight/width class, post's italic
+        // angle, and the name records that only existed to name axes now gone.
+        bytes = finalize(
+            &bytes,
+            &Finalize {
+                location: final_location,
+                variation_name_ids_before: names_before,
+            },
+        )?;
+        notes.push("Recalculated metrics and pruned unused name records".to_string());
 
         // Container.
         if self.format == OutputFormat::Woff {

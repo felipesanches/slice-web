@@ -37,6 +37,8 @@ features = [
   "HtmlAnchorElement",
   "HtmlElement",
   "HtmlInputElement",
+  "KeyboardEvent",
+  "EventTarget",
   "HtmlSelectElement",
   "Url",
   "Window",

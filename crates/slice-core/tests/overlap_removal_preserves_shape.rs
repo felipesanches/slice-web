@@ -22,7 +22,8 @@ use skrifa::outline::{DrawSettings, OutlinePen};
 use skrifa::prelude::*;
 use skrifa::{FontRef, MetadataProvider};
 
-use slice_core::instancer::{instantiate_static, normalize_location};
+use slice_core::axes::AxisLimit;
+use slice_core::instancer::{instantiate_static, normalize_location, plan_axes};
 use slice_core::overlaps::remove_overlaps;
 use slice_core::SliceFont;
 
@@ -134,8 +135,10 @@ fn instance(user: &[(&str, f64)]) -> Vec<u8> {
                 .unwrap_or(axis.default)
         })
         .collect();
+    let limits: Vec<AxisLimit> = coords.iter().map(|v| AxisLimit::Pin(*v)).collect();
     let location = normalize_location(&font, &axes, &coords);
-    instantiate_static(&font, &location).unwrap()
+    let plans = plan_axes(&font, &axes, &limits);
+    instantiate_static(&font, &location, &plans).unwrap()
 }
 
 #[test]

@@ -88,8 +88,10 @@ python3 -m http.server --directory dist 8080
 `.wasm` is served as `application/wasm`.
 
 ```sh
-cargo test --workspace      # the engine
-tools/browser-smoke.sh      # that it starts in a real browser and reads a font
+cargo test --workspace              # the engine
+tools/browser-smoke.sh              # that it starts in a real browser and reads a font
+tools/browser-slice-test.py         # that pressing Slice produces the right font
+tools/compare-with-fonttools.py     # that the result matches what fontTools produces
 ```
 
 ## How it is put together
@@ -110,8 +112,8 @@ and, more importantly, as the thing the tests are checked against.
 ### Verification
 
 There is no Rust equivalent of fontTools' instancer, so the variation maths here is a
-port, and a port is worth only as much as the evidence that it matches. Three
-independent checks:
+port, and a port is worth only as much as the evidence that it matches. Four independent
+checks:
 
 **The sub-space solver is checked against fontTools' own test vectors.**
 `crates/slice-core/src/solver.rs` is a hand port of
@@ -140,6 +142,22 @@ test would have caught.
 to change; what must not change is which points are inside the glyph. Both the before and
 after are filled with the non-zero winding rule and compared over a dense grid of sample
 points.
+
+**And the whole thing is diffed against fontTools.** The original Slice is a thin
+interface over `fontTools.varLib.instancer`, so `tools/compare-with-fonttools.py` runs
+the real library on the same input with the same request and compares the results field
+by field: every glyph outline, every advance, `maxp`, the `head` bounding box and flags,
+`hhea`'s extremes, `OS/2`'s weight and width classes and average width,
+`post.italicAngle`, the name IDs, `fvar`, `STAT`, and which lookups each `GSUB`/`GPOS`
+feature runs. Seven cases, from pinning everything to keeping two axes with one
+restricted. All seven match, apart from two documented size differences.
+
+That comparison is the only check here that can see a step being skipped altogether,
+which is a category no amount of internal consistency testing reaches. It found six
+parity defects that every other test was blind to, including `OS/2.usWeightClass` never
+being updated — so an instance pinned at `wght=1000` announced itself to the operating
+system as Light — and Recursive's `rvrn` feature never being resolved, so slicing at
+`CRSV=1` produced a font that had quietly lost its cursive `a`.
 
 ## Overlap removal
 
@@ -181,10 +199,19 @@ has them.
   regions describing an axis space that no longer exists, and removing it dangles the
   indices pointing into it. For *static* instances the table is carried through and
   evaluates to its default, so kerning comes out at the default master's values rather
-  than the pinned location's.
+  than the pinned location's; the run reports a note saying so rather than leaving it to
+  be discovered. fontTools instances these properly, and this should too.
+  (`GSUB`/`GPOS` *feature variations* — the conditional substitutions `rvrn` uses — **are**
+  resolved; it is only the positioning value store that is not.)
 - **`MVAR` across a restricted range.** Applied at the new default and then dropped, so
   vertical metrics are right there but stop varying across whatever range is left.
 - **`avar` version 2.** Refused for partial instancing.
+- **Pruning emptied features and unreferenced lookups.** fontTools removes a feature
+  whose lookups it has just emptied, and then the lookups nothing references. This keeps
+  them: an empty feature runs nothing and an unreachable lookup is never reached, so the
+  font behaves identically and is a few hundred bytes larger. Renumbering lookup indices
+  across the script list, the feature list and every chained-context rule is easy to get
+  wrong, and the size does not justify the risk.
 - **Threading.** The engine runs on the main thread, so the page is unresponsive while a
   large font is processed. The progress dialog says so rather than showing a bar that
   pretends to move. A Web Worker is the answer and is not here yet.

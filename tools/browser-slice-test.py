@@ -389,6 +389,30 @@ def main() -> int:
         )
         print("  ticked 'Remove overlapping contours'")
 
+        # The File menu advertises Ctrl+O. Check it is bound, rather than decoration:
+        # the observable effect is a click on the hidden file input, so that is what is
+        # watched for. A headless browser cannot show the picker, and does not need to.
+        opened = devtools.evaluate(
+            """
+            (function () {
+              const input = document.querySelector('input[type=file]');
+              if (!input) { throw new Error('no file input'); }
+              let clicked = false;
+              const original = input.click;
+              input.click = function () { clicked = true; };
+              document.dispatchEvent(new KeyboardEvent('keydown', {
+                key: 'o', ctrlKey: true, bubbles: true, cancelable: true }));
+              input.click = original;
+              return clicked;
+            })()
+            """
+        )
+        if not opened:
+            print("FAIL: Ctrl+O is shown in the File menu but does not open anything",
+                  file=sys.stderr)
+            return 1
+        print("  ok   Ctrl+O opens the file picker")
+
         devtools.evaluate(CAPTURE_DOWNLOAD)
         devtools.evaluate(
             """

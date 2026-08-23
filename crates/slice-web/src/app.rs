@@ -59,6 +59,30 @@ pub fn App() -> impl IntoView {
         load_sample.run(());
     }
 
+    // The File menu advertises Ctrl+O, so it has to work. Bound on the document rather
+    // than the app element, because the shortcut should fire wherever focus happens to
+    // be -- except inside a text field, where Ctrl+O is the browser's to interpret.
+    {
+        use wasm_bindgen::closure::Closure;
+        if let Some(document) = web_sys::window().and_then(|w| w.document()) {
+            let handler = Closure::<dyn FnMut(web_sys::KeyboardEvent)>::new(
+                move |event: web_sys::KeyboardEvent| {
+                    if (event.ctrl_key() || event.meta_key())
+                        && !event.alt_key()
+                        && event.key().eq_ignore_ascii_case("o")
+                    {
+                        event.prevent_default();
+                        open_dialog.run(());
+                    }
+                },
+            );
+            let _ = document
+                .add_event_listener_with_callback("keydown", handler.as_ref().unchecked_ref());
+            // The listener outlives this scope; the document owns it for the page's life.
+            handler.forget();
+        }
+    }
+
     let dragging = RwSignal::new(false);
 
     let on_drop = move |ev: web_sys::DragEvent| {
