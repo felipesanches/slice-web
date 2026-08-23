@@ -278,7 +278,9 @@ so its output behaviour **is** fontTools 4.x's, at that call's defaults. The cla
 are the ones a test can observe.
 
 **G1** · `fonttools` · Pinning every axis yields a static font: no `fvar`, no `gvar`, no
-`HVAR`/`VVAR`/`MVAR`/`STAT`-borne variation.
+`HVAR`/`VVAR`/`MVAR`. `STAT` **survives** with all of its design axis records, which is
+why name IDs that only `STAT` refers to legitimately remain in a font with no axes left
+(see G5 and G10).
 
 **G2** · `fonttools` · Pinning some axes and restricting others yields a variable font
 whose `fvar` holds only the surviving axes, with the narrowed extents.
@@ -299,8 +301,15 @@ renormalized.
 **G7** · `fonttools` · `OS/2.usWeightClass`, `OS/2.usWidthClass` and `post.italicAngle`
 are set from the pinned location (`varLib.set_default_weight_width_slant`).
 
-**G8** · `fonttools` · `maxp`, the `head` bounding box and flags bit 1, and `hhea`'s
-extremes are recalculated from the final outlines on save.
+**G8** · `fonttools` · `maxp`'s point, contour and composite maxima, the `head` bounding
+box and flags bit 1, and `hhea`'s extremes are recalculated from the final outlines on
+save (`maxp.recalc` and `hhea.recalc`, both gated on `recalcBBoxes`).
+
+An earlier draft said "`maxp` ... recalculated" without qualification, which overstates
+it. `maxp`'s **instruction** fields are not touched. Measured: planting
+`maxSizeOfInstructions = 1` into a font whose longest glyph program is 5 bytes, then
+instancing and saving, leaves it at 1. Those fields are inherited from the input, so a
+font that arrives with them wrong stays wrong.
 
 **G9** · `fonttools` · `OS/2.xAvgCharWidth` is recalculated.
 
@@ -310,8 +319,10 @@ output no longer has are pruned.
 **G11** · `fonttools` · `DSIG` is deleted, because it signs bytes that no longer exist.
 
 **G12** · `fonttools` · At the default overlap mode (`KEEP_AND_SET_FLAGS`), a static
-instance gets `OVERLAP_SIMPLE` set on the first point of every simple glyph and
-`OVERLAP_COMPOUND` on every composite.
+instance gets `OVERLAP_SIMPLE` set on the first point of every simple glyph with
+contours, and `OVERLAP_COMPOUND` on the **first component** of every composite — not on
+every component, and not at all on a glyph with zero contours such as an empty
+`.notdef`.
 
 **G13** · `fonttools` · Outlines at the requested location match what a renderer produces
 for the variable font at that location.
@@ -325,9 +336,30 @@ corpus can mark cases that only the new program is expected to pass.
 
 ## H. Containers
 
-**H1** · `fonttools` · The output container follows the file extension the user types in
-the save dialog: `.ttf`/`.otf` write an sfnt, `.woff` and `.woff2` write those.
-*(`ttFont.save` dispatches on the extension)*
+**H1** · The output container is the **input's** container, whatever the user names the
+file. `TTFont.save` never looks at the filename: it passes `self.flavor` to
+`SFNTWriter` (`ttFont.py:411`), and `self.flavor` was set from the reader when the font
+was opened (`ttFont.py:318`).
+**`suspect`.** Measured, saving each input under each name:
+
+| opened | saved as | container actually written |
+|---|---|---|
+| `.ttf` | `.woff` | **sfnt** |
+| `.ttf` | `.woff2` | **sfnt** |
+| `.woff` | `.ttf` | **WOFF** |
+| `.woff2` | `.ttf` | **WOFF2** |
+
+An earlier draft of this entry asserted the opposite and cited `dialogs.py:44`, which is
+the *open* dialog's filter and says nothing about saving. The correction matters: a user
+who opens a TTF and types `Bold.woff` gets an sfnt with a `.woff` name, which a web
+server will send with the wrong MIME type and a build tool will misidentify. Proposed
+verdict: the extension chooses the container, which is what the save dialog's own filter
+list implies it will do. Evidence: WOFF and WOFF2 are distinct formats with their own
+signatures (`wOFF`, `wOF2`), and the file extension is the only thing the user was given
+to express which one they wanted.
+
+A consequence: **H2**'s zopfli setting only ever takes effect when the input was already
+a WOFF, since that is the only way a WOFF gets written.
 
 **H2** · `slice-ui` · WOFF output is compressed with zopfli, because the worker sets
 `sfnt.USE_ZOPFLI = True` before saving.
@@ -354,7 +386,7 @@ View Source, Issue Tracker, Report a Bug.
 
 ## Summary of suspected defects
 
-Seven, in descending order of how much damage they do:
+Eight, in descending order of how much damage they do:
 
 | id | defect | proposed verdict |
 |---|---|---|
@@ -364,6 +396,7 @@ Seven, in descending order of how much damage they do:
 | B12 | `re.search` accepts a range embedded in surrounding garbage | require the whole cell to parse |
 | B8 | `[default]` is parsed and silently discarded | refuse the request |
 | B10 | an out-of-range pin is silently clamped | warn; weak, flagged for adjudication |
+| H1 | the output container is the input's, whatever the file is named | the extension chooses |
 | E5 | contradictory bit combinations pass unremarked | warn |
 
 Each is encoded in the corpus as the *corrected* behaviour, so the original is expected

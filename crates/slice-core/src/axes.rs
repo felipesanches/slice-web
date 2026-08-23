@@ -121,15 +121,21 @@ pub fn parse_axis_limit(input: &str, axis_tag: &str) -> Result<AxisLimit, SliceE
     // honoured depends on the axis, which parsing does not know about, so that decision
     // belongs in `AxisSpec::validate`.
     let stated_default = match explicit_default {
-        Some(raw) => Some(parse_range_bound(&raw).ok_or_else(|| SliceError::AxisRange {
-            value: text.to_string(),
-            axis: axis_tag.to_string(),
-        })?),
+        Some(raw) => Some(
+            parse_range_bound(&raw).ok_or_else(|| SliceError::AxisRange {
+                value: text.to_string(),
+                axis: axis_tag.to_string(),
+            })?,
+        ),
         None => None,
     };
 
     // Slice sorts the pair, so `800:400` means the same as `400:800`.
-    let (min, max) = if start <= end { (start, end) } else { (end, start) };
+    let (min, max) = if start <= end {
+        (start, end)
+    } else {
+        (end, start)
+    };
 
     // `400:400` names one coordinate, not a span. An fvar axis whose min, default and
     // max all coincide varies over nothing, so this is a pin however it was spelled.
@@ -201,9 +207,7 @@ fn parse_decimal(text: &str, allow_exponent: bool) -> Option<f64> {
         return None;
     }
     if let Some(exponent) = exponent {
-        let digits = exponent
-            .strip_prefix(['+', '-'])
-            .unwrap_or(exponent);
+        let digits = exponent.strip_prefix(['+', '-']).unwrap_or(exponent);
         if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
             return None;
         }
@@ -494,7 +498,10 @@ mod tests {
             parse_axis_limit("400:400", "wght").unwrap(),
             AxisLimit::Pin(400.0)
         );
-        assert_eq!(parse_axis_limit("0:0", "slnt").unwrap(), AxisLimit::Pin(0.0));
+        assert_eq!(
+            parse_axis_limit("0:0", "slnt").unwrap(),
+            AxisLimit::Pin(0.0)
+        );
     }
 
     #[test]
@@ -533,18 +540,14 @@ mod tests {
     fn restricted_range_must_contain_the_default() {
         let a = axis();
         // wght default is 300, so a 400:700 range cannot be compiled.
-        let err = a
-            .validate(AxisLimit::range(400.0, 700.0))
-            .unwrap_err();
+        let err = a.validate(AxisLimit::range(400.0, 700.0)).unwrap_err();
         assert!(
             matches!(err, SliceError::DefaultOutsideRange { .. }),
             "got {err:?}"
         );
 
         // A range that does contain it is fine.
-        assert!(a
-            .validate(AxisLimit::range(300.0, 700.0))
-            .is_ok());
+        assert!(a.validate(AxisLimit::range(300.0, 700.0)).is_ok());
     }
 
     #[test]

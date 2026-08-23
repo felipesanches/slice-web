@@ -47,6 +47,10 @@ def run(case: dict, fixture: str, output: str) -> dict:
 
     given = case.get("input", {})
 
+    # A case can ask what happens with no font loaded at all (F1).
+    if given.get("load_font") is False:
+        return {"ok": False, "error": "Requires a font path"}
+
     # --- load_font (__main__.py:707) -------------------------------------------------
     try:
         font_model = FontModel(fixture)
@@ -68,6 +72,23 @@ def run(case: dict, fixture: str, output: str) -> dict:
         axis_model.load_font(font_model)
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "error": f"could not read the font's tables: {e}"}
+
+    # A case that only wants to see what the editors display stops here: the Slice
+    # action would refuse a font with every cell blank (B13), so the display claims
+    # cannot be reached through it.
+    if given.get("action") == "load_only":
+        rows = []
+        for index, tag in enumerate(axis_model._v_header):
+            low, default, high = axis_model.fvar_axes[tag]
+            rows.append({
+                "tag": tag,
+                "min": low,
+                "default": default,
+                "max": high,
+                "label": axis_model._data[index][0],
+                "name": axis_model.get_axis_name_string(tag),
+            })
+        return {"ok": True, "editor": {"axes": rows}}
 
     # --- the user fills in the Axis Editor -------------------------------------------
     tags = list(axis_model._v_header)

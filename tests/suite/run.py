@@ -132,9 +132,21 @@ def score(cases: list[dict], runner: str, verbose: bool) -> dict:
     results = []
     workdir = Path(tempfile.mkdtemp(prefix=f"slice-suite-{runner}-"))
     try:
+        # Run everything first, then evaluate. `matches_case_output` compares one case's
+        # output against another's, and doing it in two passes means a case never has to
+        # care whether the one it references has run yet.
+        outcomes: dict[str, dict] = {}
+        for case in cases:
+            outcomes[case["id"]] = run_case(case, runner, workdir)
+        peers = {
+            case_id: outcome["path"]
+            for case_id, outcome in outcomes.items()
+            if outcome.get("ok") and outcome.get("path")
+        }
+
         for case in cases:
             lacks = runner == "original" and case.get("original_lacks_feature")
-            outcome = run_case(case, runner, workdir)
+            outcome = outcomes[case["id"]]
             fixture = resolve_fixture(case["fixture"])
             if fixture is None:
                 results.append({
@@ -142,7 +154,7 @@ def score(cases: list[dict], runner: str, verbose: bool) -> dict:
                     "reason": f"fixture {case['fixture']!r} not found",
                 })
                 continue
-            verdict = evaluate(case, outcome, str(fixture))
+            verdict = evaluate(case, outcome, str(fixture), peers)
             status = "pass" if verdict.passed else ("lacks-feature" if lacks else "fail")
             entry = {
                 "id": case["id"],

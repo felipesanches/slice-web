@@ -37,6 +37,22 @@ def run(case: dict, fixture: str, output: str) -> dict:
         return {"ok": False, "error": f"{binary} is not built; run cargo build -p slice-cli"}
 
     given = case.get("input", {})
+
+    if given.get("load_font") is False:
+        return {"ok": False, "error": "Requires a font path"}
+
+    if given.get("action") == "load_only":
+        completed = subprocess.run(
+            [binary, "info", "--json", fixture], capture_output=True, text=True, timeout=120
+        )
+        if completed.returncode != 0:
+            return {"ok": False, "error": (completed.stderr or "").strip()}
+        try:
+            info = json.loads(completed.stdout)
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": f"info --json produced no JSON: {e}"}
+        return {"ok": True, "editor": {"axes": info.get("axes", [])}}
+
     argv = [binary, "cut", fixture, output]
 
     for tag, text in given.get("axes", {}).items():

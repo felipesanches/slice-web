@@ -246,6 +246,12 @@ class Checker:
         tags = [a.axisTag for a in self.font["fvar"].axes] if "fvar" in self.font else []
         return tags == spec["equals"], f"tags={tags}"
 
+    #: One ulp of the 16.16 `Fixed` type that `fvar` stores axis values in. A value
+    #: written to an axis extent is quantized to a multiple of this on the way into the
+    #: file, so 0.95 comes back as 0.9499969482421875 and no implementation can do
+    #: better. Comparing exactly would be testing the storage format, not the program.
+    FIXED_ULP = 1.0 / 65536
+
     def axis_extent(self, spec):
         if "fvar" not in self.font:
             return False, "no fvar"
@@ -253,7 +259,10 @@ class Checker:
             if axis.axisTag == spec["tag"]:
                 actual = (axis.minValue, axis.defaultValue, axis.maxValue)
                 want = (spec["min"], spec["default"], spec["max"])
-                return actual == want, f"{spec['tag']} is {actual}, expected {want}"
+                agrees = all(
+                    abs(a - w) <= self.FIXED_ULP for a, w in zip(actual, want)
+                )
+                return agrees, f"{spec['tag']} is {actual}, expected {want}"
         return False, f"no {spec['tag']} axis"
 
     def named_instance_count(self, spec):

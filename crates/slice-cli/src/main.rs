@@ -72,7 +72,11 @@ enum Command {
 fn main() -> ExitCode {
     let cli = Cli::parse();
     let result = match cli.command {
-        Command::Info { font, all_names, json } => info(font, all_names, json),
+        Command::Info {
+            font,
+            all_names,
+            json,
+        } => info(font, all_names, json),
         Command::Cut {
             font,
             output,
@@ -219,7 +223,8 @@ fn info_json(font: &SliceFont) -> Result<(), String> {
         format!("\"{}\"", escape(text))
     }
     fn optional(text: Option<String>) -> String {
-        text.map(|t| quoted(&t)).unwrap_or_else(|| "null".to_string())
+        text.map(|t| quoted(&t))
+            .unwrap_or_else(|| "null".to_string())
     }
 
     let mut out = String::from("{");
