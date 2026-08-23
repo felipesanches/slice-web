@@ -13,6 +13,8 @@ is worse than no corpus.
 
 from __future__ import annotations
 
+import io
+
 import math
 from dataclasses import dataclass, field
 from typing import Any
@@ -204,12 +206,44 @@ class Checker:
         # separately would give each its own slack.
         self.peers = peers or {}
         self._source = None
+        self._instanced: dict[tuple, ttLib.TTFont] = {}
 
     @property
     def source(self) -> ttLib.TTFont:
         if self._source is None:
             self._source = ttLib.TTFont(self.source_path)
         return self._source
+
+    def _source_instanced_at(self, location: dict) -> ttLib.TTFont:
+        """The source actually instanced at `location`, as the reference to compare to.
+
+        Drawing the source through `getGlyphSet(location=...)` interpolates in floating
+        point and hands back unrounded coordinates -- 224.5 where the outline of any real
+        instance holds 225, because `glyf` stores integers. Comparing an instanced font
+        against that reference measures the rounding, not the instancing, and it cannot be
+        satisfied at all by a correct implementation at a tolerance below half a unit.
+        `instantiateVariableFont` is the reference these cases mean: it rounds the same
+        way a font must, so a tolerance of zero at a corner of the design space becomes a
+        real and meetable claim about the delta arithmetic.
+        """
+        key = tuple(sorted(location.items()))
+        if key not in self._instanced:
+            from fontTools.varLib.instancer import instantiateVariableFont
+
+            font = ttLib.TTFont(self.source_path)
+            if location and "fvar" in font:
+                instantiateVariableFont(font, dict(location), inplace=True)
+                # Compile and reload. `instantiateVariableFont` leaves the interpolated
+                # `glyf` coordinates as Python floats in memory -- 224.5 where the font
+                # on disk will hold 225 -- because rounding happens when the table is
+                # compiled. Comparing against the in-memory form measures nothing but
+                # that rounding, and no font can reproduce it.
+                buffer = io.BytesIO()
+                font.save(buffer)
+                buffer.seek(0)
+                font = ttLib.TTFont(buffer)
+            self._instanced[key] = font
+        return self._instanced[key]
 
     # -- structure
 
@@ -721,13 +755,27 @@ class Checker:
     def outlines_match_source_at(self, spec):
         tolerance = float(spec.get("tolerance", 1.0))
         location = spec.get("location", {})
-        source_loc = self._location_for(self.source, location)
+        # Instance the reference at exactly the axes the output no longer has, and draw
+        # both sides at whatever is left. Those are the axes the job pinned, so this
+        # subjects the reference to the same rounding the output went through: a pinned
+        # coordinate is stored as an integer in `glyf`, and comparing it against a
+        # float interpolation measures the rounding rather than the instancing. Axes that
+        # survived in the output are *not* pre-instanced, because there both sides are
+        # meant to interpolate and pinning one of them would compare different things.
+        wanted = self._location_for(self.source, location)
+        surviving = (
+            {a.axisTag for a in self.font["fvar"].axes} if "fvar" in self.font else set()
+        )
+        reference_font = self._source_instanced_at(
+            {t: v for t, v in wanted.items() if t not in surviving}
+        )
+        source_loc = self._location_for(reference_font, location)
         output_loc = self._location_for(self.font, location)
         worst = 0.0
-        for name in self.source.getGlyphOrder():
+        for name in reference_font.getGlyphOrder():
             if name not in self.font.getGlyphOrder():
                 return False, f"glyph {name} is missing from the output"
-            reference = _round_ops(_draw(self.source, name, source_loc))
+            reference = _round_ops(_draw(reference_font, name, source_loc))
             actual = _round_ops(_draw(self.font, name, output_loc))
             problem = _compare_outlines(reference, actual, tolerance)
             if problem:
