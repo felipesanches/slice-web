@@ -469,6 +469,102 @@ fn convert_transform(transform: read_fonts::tables::glyf::Transform) -> wglyf::T
 
 #[cfg(test)]
 mod tests {
+
+    /// A square 0..400, a dot 0..120, a composite of both, and a composite of *that*
+    /// plus another dot: the nesting is what makes this worth a test, since a one-level
+    /// implementation gets `squaredot` right and `double` wrong.
+    #[test]
+    fn composite_bounds_resolve_through_nesting() {
+        use write_fonts::tables::glyf as g;
+        use write_fonts::types::GlyphId16;
+
+        fn square(size: i16) -> g::Glyph {
+            let contour = g::Contour::from(vec![
+                CurvePoint::on_curve(0, 0),
+                CurvePoint::on_curve(size, 0),
+                CurvePoint::on_curve(size, size),
+                CurvePoint::on_curve(0, size),
+            ]);
+            g::Glyph::Simple(g::SimpleGlyph {
+                bbox: g::Bbox {
+                    x_min: 0,
+                    y_min: 0,
+                    x_max: size,
+                    y_max: size,
+                },
+                contours: vec![contour],
+                instructions: Vec::new(),
+                overlaps: false,
+            })
+        }
+
+        fn composite(parts: &[(u16, i16, i16)]) -> g::Glyph {
+            let make = |&(gid, x, y): &(u16, i16, i16)| g::Component {
+                glyph: GlyphId16::new(gid),
+                anchor: Anchor::Offset { x, y },
+                flags: Default::default(),
+                transform: Default::default(),
+            };
+            let mut iter = parts.iter();
+            let mut out = g::CompositeGlyph::new(make(iter.next().unwrap()), g::Bbox::default());
+            for part in iter {
+                out.add_component(make(part), g::Bbox::default());
+            }
+            g::Glyph::Composite(out)
+        }
+
+        let mut glyphs = vec![
+            square(400),                          // 0: square
+            square(120),                          // 1: dot
+            composite(&[(0, 0, 0), (1, 0, 520)]), // 2: squaredot
+            composite(&[(2, 0, 0), (1, 500, 0)]), // 3: double
+        ];
+        fill_composite_bboxes(&mut glyphs);
+
+        let bbox = |i: usize| match &glyphs[i] {
+            g::Glyph::Composite(c) => c.bbox,
+            _ => panic!("glyph {i} is not a composite"),
+        };
+        // squaredot: the square to 400, the dot lifted to 520..640.
+        assert_eq!(
+            bbox(2),
+            g::Bbox {
+                x_min: 0,
+                y_min: 0,
+                x_max: 400,
+                y_max: 640
+            }
+        );
+        // double: squaredot resolved one level down, plus a dot out at x=500..620.
+        assert_eq!(
+            bbox(3),
+            g::Bbox {
+                x_min: 0,
+                y_min: 0,
+                x_max: 620,
+                y_max: 640
+            }
+        );
+    }
+
+    /// A malformed font can have a composite reference itself. The pass must finish.
+    #[test]
+    fn a_reference_cycle_does_not_recurse_forever() {
+        use write_fonts::tables::glyf as g;
+        use write_fonts::types::GlyphId16;
+        let component = g::Component {
+            glyph: GlyphId16::new(0),
+            anchor: Anchor::Offset { x: 0, y: 0 },
+            flags: Default::default(),
+            transform: Default::default(),
+        };
+        let mut glyphs = vec![g::Glyph::Composite(g::CompositeGlyph::new(
+            component,
+            g::Bbox::default(),
+        ))];
+        fill_composite_bboxes(&mut glyphs);
+    }
+
     use super::*;
 
     fn font_bytes() -> &'static [u8] {
@@ -617,4 +713,110 @@ mod tests {
             "taking wght to its maximum should move at least one glyph"
         );
     }
+}
+
+/// Fill in the bounding box of every composite glyph, resolving nesting.
+///
+/// A composite's bounds depend on the glyphs it references, so they cannot be known when
+/// the composite itself is built -- the components may not have been instanced yet, and a
+/// component may itself be a composite. `write-fonts` leaves the field alone, so without
+/// this pass every composite ships with (0, 0, 0, 0). That is a real defect and not only
+/// a cosmetic one: rasterizers use the glyph bbox to size caches and to cull, `head`'s
+/// font-wide bbox is the union of the per-glyph ones and comes out too small, and
+/// `hmtx`-derived side bearings computed from it are wrong.
+///
+/// The bounds are taken over transformed *points*, not over transformed child boxes: for
+/// a rotated or skewed component the box of the transformed box is strictly larger than
+/// the box of the transformed points, and `head` would then claim more than the outlines
+/// occupy.
+///
+/// Point-anchored components (`ARGS_ARE_XY_VALUES` clear) are resolved as a zero offset.
+/// Computing their true placement means matching a point in the component against one in
+/// the glyph built so far, which depends on the order components are composed in; the
+/// arrangement is rare, and a zero offset is what the component's own coordinates already
+/// describe.
+pub fn fill_composite_bboxes(glyphs: &mut [wglyf::Glyph]) {
+    // Depth-first with memoisation. `resolving` breaks reference cycles, which a
+    // malformed font can contain and which would otherwise recurse until the stack ends.
+    let mut points: Vec<Option<Vec<(f64, f64)>>> = vec![None; glyphs.len()];
+    let mut resolving = vec![false; glyphs.len()];
+    for index in 0..glyphs.len() {
+        collect_points(glyphs, index, &mut points, &mut resolving);
+    }
+
+    for (index, glyph) in glyphs.iter_mut().enumerate() {
+        let wglyf::Glyph::Composite(composite) = glyph else {
+            continue;
+        };
+        let Some(collected) = points[index].as_ref().filter(|p| !p.is_empty()) else {
+            continue;
+        };
+        let (mut x_min, mut y_min) = (f64::MAX, f64::MAX);
+        let (mut x_max, mut y_max) = (f64::MIN, f64::MIN);
+        for &(x, y) in collected {
+            x_min = x_min.min(x);
+            y_min = y_min.min(y);
+            x_max = x_max.max(x);
+            y_max = y_max.max(y);
+        }
+        composite.bbox = wglyf::Bbox {
+            x_min: saturating_round(x_min.floor()),
+            y_min: saturating_round(y_min.floor()),
+            x_max: saturating_round(x_max.ceil()),
+            y_max: saturating_round(y_max.ceil()),
+        };
+    }
+}
+
+fn collect_points(
+    glyphs: &[wglyf::Glyph],
+    index: usize,
+    points: &mut Vec<Option<Vec<(f64, f64)>>>,
+    resolving: &mut Vec<bool>,
+) -> Vec<(f64, f64)> {
+    if let Some(done) = points.get(index).and_then(|p| p.clone()) {
+        return done;
+    }
+    if index >= glyphs.len() || resolving[index] {
+        return Vec::new();
+    }
+    resolving[index] = true;
+
+    let collected = match &glyphs[index] {
+        wglyf::Glyph::Empty => Vec::new(),
+        wglyf::Glyph::Simple(simple) => simple
+            .contours
+            .iter()
+            .flat_map(|contour| contour.iter())
+            .map(|point| (f64::from(point.x), f64::from(point.y)))
+            .collect(),
+        wglyf::Glyph::Composite(composite) => {
+            let mut out = Vec::new();
+            for component in composite.components() {
+                let child =
+                    collect_points(glyphs, component.glyph.to_u32() as usize, points, resolving);
+                let (dx, dy) = match component.anchor {
+                    wglyf::Anchor::Offset { x, y } => (f64::from(x), f64::from(y)),
+                    wglyf::Anchor::Point { .. } => (0.0, 0.0),
+                };
+                let t = component.transform;
+                let (xx, yx) = (f64::from(t.xx.to_f32()), f64::from(t.yx.to_f32()));
+                let (xy, yy) = (f64::from(t.xy.to_f32()), f64::from(t.yy.to_f32()));
+                out.extend(
+                    child
+                        .into_iter()
+                        .map(|(x, y)| (xx * x + xy * y + dx, yx * x + yy * y + dy)),
+                );
+            }
+            out
+        }
+    };
+
+    resolving[index] = false;
+    points[index] = Some(collected.clone());
+    collected
+}
+
+fn saturating_round(value: f64) -> i16 {
+    value.clamp(f64::from(i16::MIN), f64::from(i16::MAX)) as i16
 }

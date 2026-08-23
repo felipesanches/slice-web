@@ -405,6 +405,13 @@ pub fn instantiate_partial(font: &FontRef, plans: &[AxisPlan]) -> Result<Vec<u8>
         variations.push(GlyphVariations::new(gid, deltas));
     }
 
+    // A composite's bounds depend on the glyphs it references, so they can only be filled
+    // in once every glyph has been instanced. Without this the composites ship with a
+    // (0, 0, 0, 0) box and `head`'s font-wide box, being the union of the per-glyph ones,
+    // comes out too small: on the `composites` fixture restricted to wght=400:700, head
+    // claimed xMax 550 for outlines reaching 620.
+    super::glyphs::fill_composite_bboxes(&mut shapes);
+
     // Assemble.
     let mut builder = GlyfLocaBuilder::new();
     for glyph in &shapes {
