@@ -92,6 +92,18 @@ impl NormalizedLocation {
     }
 }
 
+/// Snap a normalized coordinate to F2Dot14, the precision a font actually stores.
+///
+/// This is not cosmetic. Tuple peaks, `avar` control points and renderers' own axis
+/// coordinates are all F2Dot14, so a location computed in full `f64` precision sits
+/// fractionally off the values the font was authored against. A tuple whose peak is
+/// meant to be hit exactly then yields a scalar of 0.99999 instead of 1, and any
+/// coordinate that lands near a half-unit can round the wrong way. fontTools quantizes
+/// here for the same reason.
+pub fn quantize(value: f64) -> f64 {
+    f64::from(write_fonts::types::F2Dot14::from_f32(value as f32).to_f32())
+}
+
 /// Normalize a set of user-space coordinates, applying `avar` when present.
 ///
 /// `user` gives a value per axis, in `fvar` order; axes the caller does not care about
@@ -105,13 +117,13 @@ pub fn normalize_location(
     let mut coords: Vec<f64> = axes
         .iter()
         .zip(user)
-        .map(|(axis, &v)| normalize_axis(v, axis))
+        .map(|(axis, &v)| quantize(normalize_axis(v, axis)))
         .collect();
 
     if let Some((maps, _)) = segment_maps(font) {
         for (i, coord) in coords.iter_mut().enumerate() {
             if let Some(map) = maps.get(i) {
-                *coord = apply_segment_map(*coord, map);
+                *coord = quantize(apply_segment_map(*coord, map));
             }
         }
     }
