@@ -258,6 +258,10 @@ has them.
   be discovered. fontTools instances these properly, and this should too.
   (`GSUB`/`GPOS` *feature variations* — the conditional substitutions `rvrn` uses — **are**
   resolved; it is only the positioning value store that is not.)
+  Measured against `google/fonts`, this refusal blocks partial instancing on **365 of the
+  706 variable fonts that have an axis worth narrowing — 52%**, of which 184 have more
+  than one axis. It is the largest gap in the program by a wide margin; see
+  [docs/real-world-sweep.md](docs/real-world-sweep.md).
 - **`MVAR` across a restricted range.** Applied at the new default and then dropped, so
   vertical metrics are right there but stop varying across whatever range is left.
 - **`avar` version 2.** Refused for partial instancing.
