@@ -6,6 +6,7 @@
 
 mod app;
 mod files;
+mod settings;
 mod state;
 mod ui;
 

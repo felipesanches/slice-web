@@ -53,6 +53,24 @@ pub fn App() -> impl IntoView {
         });
     });
 
+    // Settings the page was opened with, applied as soon as there is a font to apply them
+    // to. Held rather than consumed, so that opening a second font restores them again --
+    // a bookmarked weight is a thing you want for the next font too, and the address bar
+    // still says so.
+    let pending = StoredValue::new(crate::settings::from_location());
+    Effect::new(move |_| {
+        // Reruns whenever a font is loaded, because `axes` is read here.
+        let axes = state.axes.get();
+        if axes.is_empty() {
+            return;
+        }
+        pending.with_value(|settings| {
+            if !settings.is_empty() {
+                state.apply_settings(settings);
+            }
+        });
+    });
+
     // `?sample` in the URL opens the bundled font on start, so a link can show the tool
     // already working. It is also what the browser smoke test drives.
     if files::wants_sample() {
@@ -322,7 +340,23 @@ fn perform(state: AppState) {
             match files::download(&output.bytes, &name, job.format.mime_type()) {
                 Ok(()) => {
                     state.status.set(format!("Saved {name}"));
-                    state.last_result.set(output.notes);
+
+                    // The address bar becomes a description of the slice that just ran,
+                    // so the browser's own bookmark button saves the settings. Done here
+                    // rather than on every keystroke: a URL that changes while you type
+                    // is one you cannot copy.
+                    let settings = state.capture_settings();
+                    crate::settings::write_to_location(&settings);
+
+                    let mut notes = output.notes;
+                    if !settings.is_empty() {
+                        notes.push(
+                            "These settings are now in the address bar — bookmark the page \
+                             to keep them."
+                                .to_string(),
+                        );
+                    }
+                    state.last_result.set(notes);
                 }
                 Err(message) => state.report("The font could not be saved.", Some(message)),
             }

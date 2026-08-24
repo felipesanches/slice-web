@@ -213,6 +213,54 @@ impl AppState {
         }
     }
 
+    /// Everything the editors hold, in the form the URL and the recent-fonts store keep.
+    pub fn capture_settings(&self) -> crate::settings::Settings {
+        let axes = self.axes.get();
+        let text = self.axis_text.get();
+        crate::settings::Settings {
+            axes: axes
+                .iter()
+                .enumerate()
+                .filter_map(|(index, axis)| {
+                    let entry = text.get(index)?.trim();
+                    // A blank cell is the default, so recording it would only make the
+                    // URL longer and no more expressive.
+                    (!entry.is_empty()).then(|| (axis.tag.clone(), entry.to_string()))
+                })
+                .collect(),
+            names: self.names.get(),
+            bits: self.bits.get(),
+            remove_overlaps: self.remove_overlaps.get(),
+            format: self.format.get(),
+        }
+    }
+
+    /// Fill the editors in from saved settings, against whatever font is loaded now.
+    ///
+    /// Axes are matched by tag, and one the font does not have is dropped rather than
+    /// reported: a bookmark made from one font and opened with another should restore
+    /// what still applies instead of refusing the whole thing. Names and flags are
+    /// applied as given, since they are the user's text rather than the font's.
+    pub fn apply_settings(&self, settings: &crate::settings::Settings) {
+        let axes = self.axes.get();
+        let mut text = vec![String::new(); axes.len()];
+        for (tag, entry) in &settings.axes {
+            if let Some(index) = axes.iter().position(|axis| &axis.tag == tag) {
+                text[index] = entry.clone();
+            }
+        }
+        self.axis_text.set(text);
+
+        if settings.names.rows().next().is_some() {
+            self.names.set(settings.names.clone());
+        }
+        if settings.bits != slice_core::BitFlags::default() {
+            self.bits.set(settings.bits);
+        }
+        self.remove_overlaps.set(settings.remove_overlaps);
+        self.format.set(settings.format);
+    }
+
     /// Reset the Name Editor and Bit Flag Editor to what the font actually contains.
     pub fn revert_editors(&self) {
         self.font.with(|font| {
