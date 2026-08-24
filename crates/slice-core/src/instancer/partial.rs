@@ -527,6 +527,62 @@ fn partial_cff2(font: &FontRef, plans: &[AxisPlan]) -> Result<Vec<u8>, SliceErro
     finish_partial(&mut out, font, &metrics, None, plans)
 }
 
+/// Re-tent `GDEF`'s item variation store onto the axes that survive.
+///
+/// Returns `None` when the font has no GDEF or no store in it, in which case the table is
+/// copied through untouched like any other.
+///
+/// A store carries, for each delta set, a part that still depends on the surviving axes
+/// and a part that does not -- the residual at the new default location, which
+/// `varstore::rebuild` reports as `default_deltas`. For HVAR that residual is baked into
+/// `hmtx`. Here there is nowhere to bake it: the values a GDEF store modifies are GPOS
+/// value records and anchors scattered across the layout tables, and rewriting those
+/// means walking every lookup.
+///
+/// It does not arise in practice, because deltas are measured *from* the default master
+/// and Level 3 sub-spacing cannot move the default -- a restricted range has to contain
+/// it. So the residual is zero, and the assertion below says so out loud rather than
+/// trusting it. If a font ever does produce one, refusing is right: the alternative is
+/// kerning that is silently wrong everywhere except the default.
+fn rebuilt_gdef(
+    font: &FontRef,
+    plans: &[AxisPlan],
+) -> Result<Option<write_fonts::tables::gdef::Gdef>, SliceError> {
+    let Ok(gdef) = font.gdef() else {
+        return Ok(None);
+    };
+    let Some(store) = gdef.item_var_store() else {
+        return Ok(None);
+    };
+    let store = store.map_err(|e| SliceError::Read(format!("GDEF is malformed: {e}")))?;
+
+    let rebuilt = super::varstore::rebuild(&store, plans)?;
+
+    if let Some((subtable, row)) =
+        rebuilt
+            .default_deltas
+            .iter()
+            .enumerate()
+            .find_map(|(i, gains)| {
+                gains
+                    .iter()
+                    .position(|gain| gain.abs() > 0.5)
+                    .map(|j| (i, j))
+            })
+    {
+        return Err(SliceError::Unsupported(format!(
+            "Restricting an axis on this font would change its variable kerning at the \
+             default location (GDEF item variation store, subtable {subtable}, delta set \
+             {row}). Rewriting the positioning values to compensate is not implemented. \
+             Pin every axis instead, which produces a static instance."
+        )));
+    }
+
+    let mut owned: write_fonts::tables::gdef::Gdef = gdef.to_owned_table();
+    owned.item_var_store = rebuilt.store.into();
+    Ok(Some(owned))
+}
+
 /// Everything a partial instance needs once its outlines and metrics are settled.
 fn finish_partial<'a>(
     out: &mut FontBuilder<'a>,
@@ -567,6 +623,16 @@ fn finish_partial<'a>(
 
     if let Some(stat) = build_stat(font, plans)? {
         out.add_table(&stat)
+            .map_err(|e| SliceError::Write(e.to_string()))?;
+    }
+
+    // GDEF's item variation store is what variable kerning and variable anchors are
+    // measured against, and GPOS reaches into it by (outer, inner) address. Re-tenting it
+    // onto the narrowed axes is the same operation HVAR needs, so it is the same code;
+    // `varstore::rebuild` preserves every address, which is what keeps the delta-set
+    // index maps and the GPOS references pointing at the row they always pointed at.
+    if let Some(gdef) = rebuilt_gdef(font, plans)? {
+        out.add_table(&gdef)
             .map_err(|e| SliceError::Write(e.to_string()))?;
     }
 
@@ -632,18 +698,6 @@ fn finish_partial<'a>(
 /// an axis space that no longer exists, and removing them leaves the indices that point
 /// into them dangling.
 fn refuse_unsupported_variation_tables(font: &FontRef) -> Result<(), SliceError> {
-    if let Ok(gdef) = font.gdef() {
-        if gdef.item_var_store().is_some() {
-            return Err(SliceError::Unsupported(
-                "This font stores variable positioning data (a GDEF item variation \
-                 store, used for variable kerning and anchors). Restricting an axis \
-                 would leave that data describing the old design space, and this build \
-                 cannot rewrite it yet. Pin every axis instead, which produces a static \
-                 instance."
-                    .into(),
-            ));
-        }
-    }
     Ok(())
 }
 

@@ -2570,6 +2570,58 @@
           }
         ]
       }
+    },
+    {
+      "id": "partial.variable-kerning-survives-a-restricted-range",
+      "title": "Variable kerning still interpolates after an axis is narrowed",
+      "covers": [
+        "G2",
+        "G13"
+      ],
+      "class": "fonttools",
+      "rationale": "A font's variable kerning lives in a `GDEF` item variation store that `GPOS` reaches into by delta-set index. Narrowing an axis without re-tenting that store leaves the regions describing a design space the font no longer has, and the failure is quiet: the kerning is still exactly right at the default location and wrong everywhere else, so text set at any other weight mis-spaces while every outline is perfect. No outline check can see it, and no check that samples a single location can either -- which is why the sampled locations here include an interior one. Measured against fontTools 4.62.1 on this fixture at wght 400, 550 and 700, the pair values are -40/-64/-88 for A/V and -60/-87/-114 for T/A; an implementation that dropped the store would report the 400 column at all three.",
+      "fixture": "gdef-varstore",
+      "input": {
+        "axes": {
+          "wght": "400:700"
+        }
+      },
+      "expect": {
+        "outcome": "success",
+        "checks": [
+          {
+            "kind": "axis_tags",
+            "equals": [
+              "wght"
+            ]
+          },
+          {
+            "kind": "axis_extent",
+            "tag": "wght",
+            "min": 400,
+            "default": 400,
+            "max": 700
+          },
+          {
+            "kind": "has_table",
+            "table": "GDEF"
+          },
+          {
+            "kind": "kerning_matches_source_across",
+            "locations": [
+              {
+                "wght": 400
+              },
+              {
+                "wght": 550
+              },
+              {
+                "wght": 700
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }

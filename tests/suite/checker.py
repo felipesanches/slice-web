@@ -841,6 +841,65 @@ class Checker:
                 return False, f"at {location}: {detail}"
         return True, f"{len(spec['locations'])} locations agree"
 
+    def _pair_kerning_at(self, font: ttLib.TTFont, location: dict) -> dict:
+        """Every GPOS pair adjustment, as it would be at `location`.
+
+        Instanced and compiled first, for the same reason the advance check does it: a
+        still-variable font holds the default master's values, and the variation lives in
+        the GDEF item variation store that GPOS reaches into by delta-set index.
+        """
+        from fontTools.varLib.instancer import instantiateVariableFont
+
+        wanted = self._location_for(font, location)
+        if wanted and "fvar" in font:
+            instantiateVariableFont(font, wanted, inplace=True)
+            buffer = io.BytesIO()
+            font.save(buffer)
+            buffer.seek(0)
+            font = ttLib.TTFont(buffer)
+
+        pairs: dict = {}
+        if "GPOS" not in font:
+            return pairs
+        for lookup in font["GPOS"].table.LookupList.Lookup:
+            for subtable in lookup.SubTable:
+                if not hasattr(subtable, "PairSet"):
+                    continue
+                for index, pair_set in enumerate(subtable.PairSet):
+                    first = subtable.Coverage.glyphs[index]
+                    for record in pair_set.PairValueRecord:
+                        pairs[(first, record.SecondGlyph)] = getattr(
+                            record.Value1, "XAdvance", 0
+                        )
+        return pairs
+
+    def kerning_matches_source_across(self, spec):
+        """Variable kerning must still interpolate over a narrowed axis.
+
+        The failure this exists to catch is not a crash. An implementation that narrows an
+        axis without re-tenting the GDEF item variation store leaves kerning that is right
+        at the default location and wrong everywhere else, which no check that samples one
+        location can see -- and which no outline check can see at all.
+        """
+        tolerance = float(spec.get("tolerance", 0))
+        for location in spec["locations"]:
+            want = self._pair_kerning_at(ttLib.TTFont(self.source_path), location)
+            got = self._pair_kerning_at(ttLib.TTFont(self.output_path), location)
+            if not want:
+                return False, f"the source has no pair kerning at {location}"
+            for pair, value in want.items():
+                if pair not in got:
+                    return False, f"at {location}: the pair {pair} is missing"
+                if abs(value - got[pair]) > tolerance:
+                    return False, (
+                        f"at {location}: {pair[0]}/{pair[1]} kerns {value} in the source, "
+                        f"{got[pair]} here"
+                    )
+        return True, (
+            f"{len(spec['locations'])} locations agree across "
+            f"{len(want)} pairs"
+        )
+
     def filled_region_matches(self, spec):
         """The set of points inside each glyph must be unchanged.
 
