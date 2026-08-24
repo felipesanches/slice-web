@@ -1,0 +1,70 @@
+name: Pages
+
+# Publishes two things from `main` on every push: the documentation in `docs/`, built
+# with Jekyll, and the application itself at `/app/`, compiled from source here rather
+# than committed. Building it in CI is the point -- a `dist/` copied into the repo by
+# hand is a build artefact that goes stale the moment someone forgets, and there is no
+# way to tell from looking at it whether it matches the source beside it.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# The token the deploy step needs. `contents: read` is enough for the checkout.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and never cancel one that is already publishing: a
+# half-written site is worse than an out-of-date one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: jetli/wasm-pack-action@v0.4.0
+
+      - name: Build the application
+        run: ./build.sh
+
+      # Jekyll runs over `docs/` only. The application is copied in afterwards, so
+      # nothing in `dist/` is ever handed to a Markdown processor -- Jekyll has no
+      # business anywhere near a .wasm file.
+      - uses: actions/configure-pages@v5
+      - uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./docs
+          destination: ./_site
+
+      - name: Place the application at /app/
+        run: |
+          mkdir -p _site/app
+          cp -r dist/. _site/app/
+          test -f _site/app/index.html
+          test -f _site/app/pkg/slice_web_bg.wasm
+          test -f _site/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./_site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

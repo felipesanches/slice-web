@@ -1,4 +1,8 @@
-# What the original Slice does
+---
+layout: "default"
+title: "What the original Slice does"
+description: "A numbered map of the original program's behaviour"
+---
 
 A behavioural map of [Slice](https://github.com/source-foundry/Slice) 0.7.1 by Source
 Foundry, read out of its source rather than its documentation. Every entry is a numbered,

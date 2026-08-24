@@ -2,6 +2,10 @@
 
 **Build custom design sub-spaces from variable fonts, in the browser.**
 
+### → [Try it](https://felipesanches.github.io/slice-web/app/)
+
+The current build of `main`, deployed automatically on every push.
+
 A reimplementation of [Slice](https://github.com/source-foundry/Slice) by Source Foundry:
 same interface, Rust engine, runs as a web page, and it removes overlapping contours —
 the thing the original never did, and the reason this exists.
@@ -22,6 +26,7 @@ and handed straight back as a download. There is no server, and nothing to uploa
 
 | | |
 |---|---|
+| **[The application](https://felipesanches.github.io/slice-web/app/)** | Slice itself, running. Built from `main` by CI, not committed |
 | **[User's manual](https://felipesanches.github.io/slice-web/)** | How to use Slice, start to finish: the three editors, the axis syntax, overlap removal, the command line, and what every error message means |
 | [User's manual (PDF)](docs/manual/slice-manual.pdf) | The same manual, typeset — 10 pages |
 | [Test suite in plain English](docs/test-suite.md) | All 297 conformance cases and the reasoning behind each |

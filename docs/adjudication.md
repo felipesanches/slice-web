@@ -1,4 +1,8 @@
-# Adjudication: every case the original fails, and why
+---
+layout: "default"
+title: "Adjudication: every case the original fails, and why"
+description: "Every case the original Slice fails, and the measurement behind each verdict"
+---
 
 The corpus in `tests/suite/` is written against what a Slice-like program *should* do, not
 against what either implementation happens to do. So when the original fails a case there

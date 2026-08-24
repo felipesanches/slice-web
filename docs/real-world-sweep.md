@@ -1,4 +1,8 @@
-# What happens on 775 real fonts
+---
+layout: "default"
+title: "What happens on 775 real fonts"
+description: "Slicing 775 real variable fonts from Google Fonts"
+---
 
 The conformance corpus in `tests/suite/` is 297 cases over 14 fixtures, thirteen of them
 synthetic. Passing all of it says the program does what we thought to ask for. This is the

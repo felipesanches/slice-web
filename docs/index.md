@@ -26,13 +26,22 @@ Slice takes a variable font and gives you a smaller one. You can:
   because support for overlapping outlines in design applications remains poor after more
   than a decade.
 
-Everything happens in your browser. The font is never uploaded anywhere.
+Everything happens in your browser. The font is never uploaded anywhere. You can
+[try it now](https://felipesanches.github.io/slice-web/app/).
 
 ## Two ways to run it
 
 ### In a browser
 
-Build the static site and serve it:
+The current build of `main` is published and ready to use:
+
+**<https://felipesanches.github.io/slice-web/app/>**
+
+Nothing is uploaded. The page is static files and a WebAssembly module; your font is read
+by the browser, sliced there, and handed straight back as a download. You can confirm that
+by loading the page and then going offline before you press Slice.
+
+To run it from a checkout instead:
 
     ./build.sh
     python3 -m http.server --directory dist 8080
@@ -331,14 +340,18 @@ them.
 
 Every behavioural claim in this manual is tested, and the tests are readable:
 
-- **`docs/test-suite.md`** — all 297 conformance cases in plain English, each with the
-  reasoning for why that is the right answer.
-- **`docs/adjudication.md`** — every case the original Slice fails, with the measurement
-  behind each verdict.
-- **`docs/real-world-sweep.md`** — what happens on 775 real variable fonts from Google
-  Fonts: 133,483 glyphs compared against fontTools with no disagreements.
-- **`docs/original-behaviour.md`** — the numbered map of the original program's behaviour
-  that the test suite is written against.
+- **[The test suite in plain English](https://felipesanches.github.io/slice-web/test-suite.html)**
+  — all 297 conformance cases, each with the reasoning for why that is the right answer.
+- **[Adjudication](https://felipesanches.github.io/slice-web/adjudication.html)** — every
+  case the original Slice fails, with the measurement behind each verdict.
+- **[The real-world sweep](https://felipesanches.github.io/slice-web/real-world-sweep.html)**
+  — what happens on 775 real variable fonts from Google Fonts: 133,483 glyphs compared
+  against fontTools with no disagreements.
+- **[The behaviour map](https://felipesanches.github.io/slice-web/original-behaviour.html)**
+  — the numbered map of the original program's behaviour that the suite is written against.
+
+Absolute URLs rather than filenames, so the same line works in the PDF, on the website and
+in the repository.
 
 ## Credits and licence
 
