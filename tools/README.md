@@ -12,6 +12,7 @@ something that is already in the tree.
 | `compare-with-fonttools.py` | Does slicing a font here give the same font the original Slice would have given? |
 | `corpus-sweep.py` | Pointed at hundreds of real variable fonts nobody designed a test around, does it crash, does it produce a readable font, and does that font agree with fontTools? |
 | `compare-cff2-with-fonttools.py` | Does instancing a CFF2 font resolve the same blends into the same charstrings fontTools writes? |
+| `overlap-engine-eval/` | Would `linesweeper` remove overlaps correctly on the shapes `flo_curves` gets wrong, and can it be used from WebAssembly? (a cargo crate; see its own README) |
 | `woff2-decoder-eval/` | Which pure-Rust WOFF2 decoder reconstructs an sfnt most faithfully, and which ones still build? (a cargo crate, not a script; see its own README) |
 
 Two more live as cargo examples next to the code they debug, rather than here:

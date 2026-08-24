@@ -1,0 +1,11 @@
+[package]
+name = "overlap-engine-eval"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+linesweeper = "0.4"
+kurbo = "0.13"
+
+[workspace]

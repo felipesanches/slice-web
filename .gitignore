@@ -1,5 +1,6 @@
 /target
 /tools/woff2-decoder-eval/target
+/tools/overlap-engine-eval/target
 /dist
 
 # Built by .github/workflows/pages.yml and copied into the site at deploy time.
