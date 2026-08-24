@@ -33,7 +33,9 @@ and handed straight back as a download. There is no server, and nothing to uploa
 
 The manual is generated from a single source: edit `docs/manual/manual.md` and run
 `docs/manual/build.py`, which writes the LaTeX, the PDF and the GitHub Pages copy together
-so they cannot drift apart.
+so they cannot drift apart. `docs/manual/build.py --check` says whether the committed
+outputs are current; it is a local step and CI does not run it, so that building the
+manual never becomes a reason for the build machine to carry a TeX installation.
 
 ## Why
 

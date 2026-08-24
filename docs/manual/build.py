@@ -25,6 +25,11 @@ Usage
 
 Needs `pdflatex` for the PDF; `--no-pdf` skips it. The .tex is written either way, so the
 PDF can be built elsewhere.
+
+`--check` is deliberately a local step: CI does not run it, and the build machine carries
+no TeX installation. Run it before committing a change to `manual.md`. (It compares the
+committed files and never invokes pdflatex, so it needs no TeX itself -- but keeping the
+whole manual pipeline off CI keeps the CI image small.)
 """
 
 from __future__ import annotations
