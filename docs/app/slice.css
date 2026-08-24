@@ -1,0 +1,706 @@
+/* Slice — interface styles.
+ *
+ * The layout follows the original PyQt5 application: a menu bar, a wordmark, a font
+ * path row, then the Axis, Name and Bit Flag editors stacked in group boxes, a Slice
+ * button, and a status bar along the bottom. The group-box look is deliberate; it is
+ * what makes this recognisably the same tool.
+ */
+
+@font-face {
+  /* The wordmark face from the original: Recursive sliced at MONO=0, CASL=0.5,
+     wght=800, slnt=0, CRSV=1, subset to the letters in "Slice". */
+  font-family: "Recursive Slice";
+  src: url("./fonts/RecursiveSans-Slice_mod.subset.ttf") format("truetype");
+  font-display: swap;
+}
+
+:root {
+  --bg: #f4f4f5;
+  --panel: #ffffff;
+  --panel-alt: #fafafa;
+  --ink: #18181b;
+  --ink-soft: #52525b;
+  --ink-faint: #8a8a94;
+  --line: #d8d8de;
+  --line-strong: #b9b9c2;
+  --accent: #c2410c;
+  --accent-ink: #ffffff;
+  --accent-soft: #fff1e9;
+  --danger: #b42318;
+  --danger-soft: #fef3f2;
+  --warn-soft: #fffaeb;
+  --warn-line: #f5d78e;
+  --radius: 8px;
+  --mono: ui-monospace, "SF Mono", "IBM Plex Mono", "JetBrains Mono", Menlo, Consolas,
+    monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131316;
+    --panel: #1c1c20;
+    --panel-alt: #232329;
+    --ink: #f2f2f4;
+    --ink-soft: #b4b4bd;
+    --ink-faint: #8a8a94;
+    --line: #33333b;
+    --line-strong: #45454f;
+    --accent: #fb923c;
+    --accent-ink: #1a1005;
+    --accent-soft: #2c1a0d;
+    --danger: #fda29b;
+    --danger-soft: #33201e;
+    --warn-soft: #2b2312;
+    --warn-line: #6b5a20;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.boot,
+.noscript {
+  max-width: 34rem;
+  margin: 6rem auto;
+  padding: 0 1.5rem;
+  color: var(--ink-soft);
+}
+.boot.failed pre {
+  white-space: pre-wrap;
+  background: var(--danger-soft);
+  color: var(--danger);
+  padding: 0.75rem;
+  border-radius: var(--radius);
+}
+
+/* ---------------------------------------------------------------- app shell */
+
+.app {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 0 1.25rem 6rem;
+  position: relative;
+}
+
+.app.dragging::after {
+  content: "Drop to open";
+  position: fixed;
+  inset: 0.75rem;
+  z-index: 40;
+  border: 3px dashed var(--accent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent-soft) 88%, transparent);
+  color: var(--accent);
+  font-size: 1.4rem;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ menubar */
+
+.menubar {
+  display: flex;
+  gap: 0.15rem;
+  border-bottom: 1px solid var(--line);
+  margin: 0 -1.25rem 1.5rem;
+  padding: 0 1.25rem;
+  background: var(--panel);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.menu {
+  position: relative;
+}
+
+.menu-title {
+  background: none;
+  border: 0;
+  color: var(--ink);
+  font: inherit;
+  padding: 0.55rem 0.8rem;
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+}
+.menu-title:hover,
+.menu.open .menu-title {
+  background: var(--panel-alt);
+  color: var(--accent);
+}
+
+.menu-items {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 17rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 0 var(--radius) var(--radius) var(--radius);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 18%);
+  padding: 0.3rem;
+  z-index: 31;
+}
+.menu-items.open {
+  display: block;
+}
+
+.menu-items button,
+.menu-items a {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  color: var(--ink);
+  font: inherit;
+  text-decoration: none;
+  padding: 0.4rem 0.6rem;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.menu-items button:hover:not(:disabled),
+.menu-items a:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.menu-items button:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+}
+.menu-items hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 0.3rem 0.2rem;
+}
+.menu-heading {
+  display: block;
+  padding: 0.4rem 0.6rem 0.2rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+}
+.menu-items kbd,
+.menu-items .external {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+}
+
+/* -------------------------------------------------------------------- title */
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+.title h1 {
+  font-family: "Recursive Slice", var(--sans);
+  font-size: 2.6rem;
+  font-weight: 800;
+  margin: 0;
+  line-height: 1;
+}
+.title .tagline {
+  margin: 0;
+  color: var(--ink-soft);
+  flex-basis: 100%;
+}
+.logo {
+  width: 46px;
+  height: 46px;
+  color: var(--accent);
+  flex: none;
+}
+
+/* ------------------------------------------------------------------- groups */
+
+.group {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem 1.1rem;
+  margin-bottom: 1.1rem;
+}
+.group h2 {
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-soft);
+}
+.hint {
+  margin: 0.7rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.85rem;
+}
+.hint code,
+.notes code {
+  font-family: var(--mono);
+  background: var(--panel-alt);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.05em 0.35em;
+  font-size: 0.85em;
+  color: var(--ink-soft);
+}
+.empty {
+  color: var(--ink-faint);
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------- font path */
+
+.font-path {
+  display: flex;
+  gap: 0.85rem;
+  align-items: stretch;
+}
+.dropzone {
+  flex: 1;
+  border: 2px dashed var(--line-strong);
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem;
+  display: flex;
+  align-items: center;
+  min-height: 4.1rem;
+  background: var(--panel-alt);
+}
+.dropzone.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.dropzone .placeholder {
+  margin: 0;
+  color: var(--ink-faint);
+}
+.dropzone .loaded {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.dropzone .loaded strong {
+  font-family: var(--mono);
+  overflow-wrap: anywhere;
+}
+.detail {
+  color: var(--ink-faint);
+  font-size: 0.85rem;
+}
+
+/* ------------------------------------------------------------------- tables */
+
+table.editor {
+  width: 100%;
+  border-collapse: collapse;
+}
+table.editor th,
+table.editor td {
+  text-align: left;
+  padding: 0.3rem 0.55rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+table.editor thead th {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+  font-weight: 600;
+  border-bottom-color: var(--line-strong);
+}
+table.editor tbody tr:nth-child(even) {
+  /* Alternating rows, as the original's table views use. */
+  background: var(--panel-alt);
+}
+table.editor tbody tr:last-child th,
+table.editor tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.axis-editor .axis-tag {
+  font-family: var(--mono);
+  font-weight: 600;
+  white-space: nowrap;
+  width: 1%;
+}
+.axis-editor .range {
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.name-editor th {
+  font-family: var(--mono);
+  font-weight: 500;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  width: 1%;
+}
+
+.badge {
+  margin-left: 0.4rem;
+  font-family: var(--sans);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 0 0.4em;
+}
+
+input[type="text"],
+select {
+  width: 100%;
+  font: inherit;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  padding: 0.32rem 0.5rem;
+}
+input[type="text"]:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+input.numeric {
+  font-family: var(--mono);
+}
+input.invalid {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+.field-error {
+  margin: 0.3rem 0 0;
+  color: var(--danger);
+  font-size: 0.82rem;
+}
+
+/* ---------------------------------------------------------------- bit flags */
+
+.bit-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 0.85rem;
+}
+fieldset {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.85rem 0.75rem;
+  margin: 0;
+}
+legend {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  padding: 0 0.35rem;
+}
+.checkboxes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.3rem 0.8rem;
+}
+.checkboxes label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--mono);
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.binary {
+  margin: 0.6rem 0 0;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  color: var(--ink-faint);
+}
+.warnings {
+  margin: 0.85rem 0 0;
+  padding: 0.6rem 0.9rem 0.6rem 2rem;
+  background: var(--warn-soft);
+  border: 1px solid var(--warn-line);
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
+/* ------------------------------------------------------------------ options */
+
+.option {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  padding: 0.4rem 0;
+  cursor: pointer;
+}
+.option input[type="checkbox"] {
+  margin-top: 0.3rem;
+  flex: none;
+}
+.option span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.option.format {
+  align-items: center;
+  gap: 1rem;
+  cursor: default;
+}
+.option.format select {
+  width: auto;
+  min-width: 18rem;
+}
+
+/* ------------------------------------------------------------------ actions */
+
+.actions {
+  display: flex;
+  justify-content: center;
+  margin: 1.6rem 0;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+}
+button.primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 0;
+  border-radius: var(--radius);
+  padding: 0.55rem 1.2rem;
+  font-weight: 600;
+}
+button.primary.slice {
+  min-width: 13rem;
+  padding: 0.7rem 1.2rem;
+  font-size: 1.05rem;
+}
+button.primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+button.primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+button.secondary {
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 0.55rem 1.15rem;
+  font-weight: 500;
+}
+button.secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.notes ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.hidden-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* --------------------------------------------------------------- status bar */
+
+.statusbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.4rem 1.25rem;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  z-index: 20;
+}
+.statusbar .version {
+  font-family: var(--mono);
+  color: var(--ink-faint);
+}
+
+/* ------------------------------------------------------------------ dialogs */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 45%);
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  z-index: 50;
+}
+.modal {
+  background: var(--panel);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 35%);
+  padding: 1.35rem 1.5rem;
+  max-width: 34rem;
+  width: 100%;
+  max-height: 85vh;
+  overflow: auto;
+}
+.modal h2 {
+  margin: 0 0 0.6rem;
+  font-size: 1.15rem;
+}
+.modal .buttons {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1.1rem;
+}
+.modal.error h2 {
+  color: var(--danger);
+}
+.modal pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--panel-alt);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.7rem;
+  font-family: var(--mono);
+  font-size: 0.83rem;
+  margin: 0.5rem 0 0;
+}
+.modal details summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+
+.about-head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.about-head h2 {
+  font-family: "Recursive Slice", var(--sans);
+  font-size: 2rem;
+  font-weight: 800;
+  margin: 0;
+}
+.about-lead {
+  color: var(--ink-soft);
+}
+.modal.about h3 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+  margin: 1.1rem 0 0.4rem;
+}
+.credits {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+.licence {
+  color: var(--ink-faint);
+  font-size: 0.85rem;
+}
+.modal a {
+  color: var(--accent);
+}
+
+.modal.progress {
+  max-width: 22rem;
+  text-align: center;
+}
+.indeterminate {
+  height: 6px;
+  background: var(--panel-alt);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 0.9rem 0 0.6rem;
+}
+.indeterminate .bar {
+  height: 100%;
+  width: 38%;
+  background: var(--accent);
+  border-radius: 999px;
+  animation: sweep 1.1s ease-in-out infinite;
+}
+@keyframes sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .indeterminate .bar {
+    animation: none;
+    width: 100%;
+  }
+}
+
+@media (max-width: 34rem) {
+  .font-path {
+    flex-direction: column;
+  }
+  .title h1 {
+    font-size: 2.1rem;
+  }
+  .option.format {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .option.format select {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+button.linklike {
+  display: block;
+  margin-top: 0.25rem;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
