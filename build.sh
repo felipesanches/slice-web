@@ -33,6 +33,11 @@ rm -f dist/pkg/package.json dist/pkg/.gitignore dist/pkg/README.md dist/pkg/LICE
 echo "==> copying the page"
 cp -R web/. dist/
 
+# The logo lives with the documentation site, which needs it inside `docs/` for
+# Jekyll to publish it. Copying rather than duplicating keeps one canonical file,
+# so the application and the website cannot show different marks.
+cp docs/assets/slice-icon.svg dist/
+
 echo
 echo "dist/ is ready:"
 du -h dist/pkg/slice_web_bg.wasm | awk '{print "  wasm  " $1}'

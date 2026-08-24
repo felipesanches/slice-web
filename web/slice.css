@@ -226,10 +226,12 @@ body {
   flex-basis: 100%;
 }
 .logo {
-  width: 46px;
-  height: 46px;
-  color: var(--accent);
+  /* The icon is 75 x 60, so height follows from the width rather than being set
+     square, which would squash it. */
+  width: 58px;
+  height: auto;
   flex: none;
+  display: block;
 }
 
 /* ------------------------------------------------------------------- groups */

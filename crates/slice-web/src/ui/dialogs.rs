@@ -132,6 +132,21 @@ pub fn AboutDialog(state: AppState) -> impl IntoView {
                                 "fontTools"
                             </a>
                         </li>
+                        // The application ships the icon, so its attribution has to be
+                        // reachable from inside the application, not only from the
+                        // repository's thirdparty/ directory.
+                        <li>
+                            "The icon is the original Slice project's, itself a derivative "
+                            "of a "
+                            <a
+                                href="https://www.flaticon.com/free-icon/cheesecake_3400263"
+                                target="_blank"
+                                rel="noreferrer"
+                            >
+                                "cheesecake icon"
+                            </a>
+                            " by flaticon.com, used under the Flaticon license"
+                        </li>
                     </ul>
                     <p class="licence">
                         "GNU General Public License v3 or later, as the original is."
@@ -147,32 +162,18 @@ pub fn AboutDialog(state: AppState) -> impl IntoView {
     }
 }
 
-/// The application mark: a glyph counter with a slice taken out of it.
+/// The application mark, shared with the documentation site.
 #[component]
 pub fn SliceLogo() -> impl IntoView {
+    // The original Slice project's icon, so this is recognisable as the same tool. It is
+    // one file shared with the documentation site rather than inline markup: `build.sh`
+    // copies `docs/assets/slice-icon.svg` into the build, so the app and the website
+    // cannot drift into showing different logos.
+    //
+    // It is decorative here -- every place it appears sits beside the word "Slice" -- so
+    // it carries an empty alt and is hidden from assistive technology rather than making
+    // a screen reader announce the name twice.
     view! {
-        <svg
-            class="logo"
-            viewBox="0 0 48 48"
-            xmlns="http://www.w3.org/2000/svg"
-            role="img"
-            aria-label="Slice"
-        >
-            <defs>
-                <clipPath id="slice-clip">
-                    <path d="M0 0 H48 V20 L8 44 H0 Z"/>
-                </clipPath>
-            </defs>
-            <g clip-path="url(#slice-clip)">
-                <circle cx="24" cy="24" r="17" fill="none" stroke="currentColor" stroke-width="7"/>
-            </g>
-            <path
-                d="M46 14 L6 46"
-                stroke="currentColor"
-                stroke-width="3"
-                stroke-linecap="round"
-                opacity="0.55"
-            />
-        </svg>
+        <img class="logo" src="./slice-icon.svg" alt="" aria-hidden="true"/>
     }
 }
