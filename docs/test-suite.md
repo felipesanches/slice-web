@@ -37,11 +37,11 @@ Every case is labelled with where its authority comes from:
 | label | meaning | cases |
 |---|---|---|
 | `spec` | the OpenType specification requires it | 86 |
-| `fonttools` | inherited from fontTools, which the original delegates to | 103 |
+| `fonttools` | inherited from fontTools, which the original delegates to | 104 |
 | `slice-ui` | the application's own contract | 74 |
 | `judgement` | a defensible design choice with no external authority | 34 |
 
-There are **297 cases** in total, across 6 areas.
+There are **298 cases** in total, across 6 areas.
 17 of them require removing overlaps, which the original never
 had; it is expected to fail those, and that is not counted against it.
 
@@ -51,7 +51,7 @@ had; it is expected to fail those, and that is not counted against it.
 - [bitflags](#bitflags) — 37 cases
 - [names](#names) — 45 cases
 - [outlines-containers](#outlines-containers) — 57 cases
-- [partial-instancing](#partial-instancing) — 56 cases
+- [partial-instancing](#partial-instancing) — 57 cases
 - [static-instancing](#static-instancing) — 50 cases
 
 ## axis-syntax
@@ -2060,6 +2060,14 @@ Recursive is a real font with avar, feature variations and a five-axis space; wh
 
 <sub>covers G2, G13 · authority: `fonttools` · fixture: `two-axis`</sub>
 
+### `partial.variable-kerning-survives-a-restricted-range`
+
+**Variable kerning still interpolates after an axis is narrowed**
+
+A font's variable kerning lives in a `GDEF` item variation store that `GPOS` reaches into by delta-set index. Narrowing an axis without re-tenting that store leaves the regions describing a design space the font no longer has, and the failure is quiet: the kerning is still exactly right at the default location and wrong everywhere else, so text set at any other weight mis-spaces while every outline is perfect. No outline check can see it, and no check that samples a single location can either -- which is why the sampled locations here include an interior one. Measured against fontTools 4.62.1 on this fixture at wght 400, 550 and 700, the pair values are -40/-64/-88 for A/V and -60/-87/-114 for T/A; an implementation that dropped the store would report the 400 column at all three.
+
+<sub>covers G2, G13 · authority: `fonttools` · fixture: `gdef-varstore`</sub>
+
 ## static-instancing
 
 Pinning every axis, which is what most people come to Slice for: one weight, frozen, ready to hand to a design application. The output has no axes left, so everything that described variation has to go, and everything that described the font's identity has to be brought up to date.
@@ -2525,7 +2533,7 @@ that a reimplementation knows they exist, not because the corpus checks them.
 | F2 | 3 | Axis entries are validated before the save dialog opens; a parse |
 | F3 | 3 | The job is refused if it does not narrow the design space (B13) |
 | G1 | 26 | Pinning every axis yields a static font: no `fvar`, no `gvar`, no |
-| G2 | 40 | Pinning some axes and restricting others yields a variable font |
+| G2 | 41 | Pinning some axes and restricting others yields a variable font |
 | G3 | 10 | `avar` segment maps are renormalized onto the new extents |
 | G4 | 12 | Named instances that fall outside the new design space are dropped |
 | G5 | 15 | `STAT` is kept; its axis values outside the new limits are |
@@ -2536,7 +2544,7 @@ that a reimplementation knows they exist, not because the corpus checks them.
 | G10 | 24 | Name records that existed only to name axes and instances the |
 | G11 | 1 | `DSIG` is deleted, because it signs bytes that no longer exist |
 | G12 | 4 | At the default overlap mode (`KEEP_AND_SET_FLAGS`), a static |
-| G13 | 41 | Outlines at the requested location match what a renderer produces |
+| G13 | 42 | Outlines at the requested location match what a renderer produces |
 | G14 | 20 | original never removes overlaps. `instantiateVariableFont` accepts |
 | H1 | 21 | output container is the **input's** container, whatever the user names the |
 | H2 | 1 | WOFF output is compressed with zopfli, because the worker sets |

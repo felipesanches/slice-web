@@ -33,20 +33,17 @@ upper half — so 1481 jobs from 775 fonts.
 
 | | |
 |---|---|
-| jobs succeeded | **1115 / 1481** (75.3%) |
+| jobs succeeded | **1479 / 1481** (99.9%) |
 | **static** (every axis pinned) | **774 / 775** (99.9%) |
-| **partial** (one axis narrowed) | 341 / 706 (48.3%) |
+| **partial** (one axis narrowed) | **705 / 706** (99.9%) |
 | panics | **0** |
 | outputs fontTools could not open | **0** |
-| glyphs compared against fontTools | **133,483** |
+| glyphs compared against fontTools | **177,154** |
 | outline or advance disagreements | **0** |
 | inputs modified | **0** of 775, sha256-verified before and after |
 
-Every one of the 366 failures is one of exactly two things, and neither is a wrong answer:
-
-- **365 are the same clean refusal**, on the partial job only: the font carries a `GDEF`
-  item variation store and this program does not yet rescale one. See below.
-- **1 is fontTools crashing**, not us. See below.
+Both remaining failures are the same font, and neither is a wrong answer: fontTools cannot
+instance it, so there is no reference to compare against. See below.
 
 Nothing produced a malformed font, and nothing crashed.
 
@@ -68,23 +65,25 @@ record survived".
 The tier-3 line still reports this font, because fontTools cannot produce a reference to
 compare against. That is a limitation of the comparison, not a disagreement.
 
-## The gap this quantified
+## The gap this quantified, and closed
 
-**A `GDEF` item variation store blocks partial instancing on 52% of the variable fonts
-that have an axis worth narrowing** — 365 of 706, which is 47% of all 775. Of those, 184
-have more than one axis, which is exactly the population most likely to want partial
-instancing in the first place.
+The first run of this sweep found that a `GDEF` item variation store -- variable kerning
+and anchors -- blocked partial instancing on **365 of the 706 variable fonts that have an
+axis worth narrowing, 52%**, of which 184 had more than one axis. That was the largest
+limitation in the program, and the corpus could never have shown it: the one fixture with a
+`GDEF` variation store is used by cases that pin every axis, where the store is legitimately
+dropped.
 
-The refusal is deliberate and the message says why: rescaling an axis without rescaling the
-store would leave variable kerning and anchor positions describing a design space the font
-no longer has. Refusing beats shipping that silently. But the corpus could never have shown
-how much of the real world this excludes: the one fixture with a `GDEF` variation store is
-used by cases that pin every axis, where the store is legitimately dropped.
+It is fixed. `varstore::rebuild`, written for CFF2's `HVAR`, re-tents a store that carries
+its own deltas, and that is the same operation `GDEF` needs; wiring it up took nine lines
+and a guard. Partial instancing went from **341/706 (48.3%) to 705/706 (99.9%)** on the
+same corpus, and `partial.variable-kerning-survives-a-restricted-range` now holds it, with
+a check that samples an interior location because kerning frozen at the default is right
+at the default and wrong everywhere else.
 
-`crates/slice-core/src/instancer/varstore.rs`, written for CFF2's `HVAR`, is the piece that
-would lift this. It re-tents a store that carries its own deltas, which is the same problem.
-Wiring it to `GDEF` and the `GPOS` stores that reference it is the single highest-value
-thing left in this program.
+This is the argument for sweeping a real corpus in one sentence: the gap was documented
+before the sweep, as one bullet among eight, weighted the same as "the progress bar does
+not animate". The sweep is what said it was the whole ballgame.
 
 ## Speed
 
@@ -94,9 +93,9 @@ entirely fontTools building reference instances to compare against.
 
 ## What this does and does not license
 
-It licenses a strong claim about the static path: 774 of 775 real fonts, 133,483 glyphs
-compared against the reference implementation, zero disagreements, zero crashes, zero
-malformed outputs.
+It licenses a strong claim about both instancing paths: 1479 of 1481 jobs over 775 real
+fonts, 177,154 sampled glyphs compared against the reference implementation, zero
+disagreements, zero crashes, zero malformed outputs.
 
 It licenses nothing about CFF2, because the corpus contains no CFF2 variable font. It
 licenses nothing about overlap removal, which the sweep does not exercise — that remains

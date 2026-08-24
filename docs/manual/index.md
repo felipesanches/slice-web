@@ -318,13 +318,6 @@ You do not have to think about any of this, but it is worth knowing that it happ
 Stated plainly, because a font tool that is quiet about its gaps is worse than one that has
 them.
 
-- **Partial instancing is refused on fonts with variable kerning.** If a font carries a
-  `GDEF` item variation store — variable kerning and anchor positions — Slice will pin its
-  axes but will not narrow them, because rescaling the axis without rescaling that data
-  would leave the kerning describing a design space the font no longer has. Measured
-  against Google Fonts, this affects **52% of the variable fonts that have an axis worth
-  narrowing**. Pinning every axis works on essentially all of them. This is the largest
-  gap in the program.
 - **CFF 1.0 fonts are refused.** A plain `CFF ` font is not variable to begin with. CFF2
   variable fonts are supported.
 - **`avar` version 2** is refused for partial instancing.

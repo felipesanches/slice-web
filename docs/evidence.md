@@ -15,7 +15,7 @@ reproduces it.
 <ul class="cards" markdown="0">
   <li>
     <h3><a href="../test-suite.html">The test suite in plain English</a></h3>
-    <p>All 297 conformance cases, each with the reasoning for why that is the right
+    <p>All 298 conformance cases, each with the reasoning for why that is the right
        answer. Generated from the cases themselves, so it cannot drift from them.</p>
   </li>
   <li>
@@ -25,8 +25,8 @@ reproduces it.
   </li>
   <li>
     <h3><a href="../real-world-sweep.html">The real-world sweep</a></h3>
-    <p>775 real variable fonts from Google Fonts: 133,483 glyphs compared against
-       fontTools, and the 52% figure that no synthetic fixture could have produced.</p>
+    <p>775 real variable fonts from Google Fonts: 177,154 glyphs compared against
+       fontTools with no disagreements, and the 52% gap it found — since closed.</p>
   </li>
   <li>
     <h3><a href="../original-behaviour.html">The behaviour map</a></h3>
@@ -57,7 +57,8 @@ pinned release. All 32 pass.
 change and what must not change is which points are inside the glyph.
 
 **Against 775 real fonts**, which is the only check that can say what fraction of the
-world a limitation actually affects.
+world a limitation actually affects. It found one that mattered — variable kerning
+blocking partial instancing on 52% of them — which is now fixed.
 
 ## Two rules
 
@@ -81,7 +82,8 @@ Stated because a page about evidence that only lists successes is advertising.
   fontTools' instancer does not remove overlaps — so it is checked for self-consistency
   and by filled region, not against an oracle. The fixtures are rectangles and triangles;
   real glyphs are curves meeting at shallow angles, which is where boolean geometry goes
-  wrong.
+  wrong. The engine (`linesweeper`) was chosen by measurement rather than by reputation —
+  see `tools/overlap-engine-eval/` — but that measurement used the same simple shapes.
 - **The interface.** Ten of the sixty-one behavioural claims describe the running
   application — menus, the status bar, drag and drop, the thread the work runs on — and a
   corpus that drives both programs headlessly cannot reach them. Of the fifty-one it can

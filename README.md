@@ -290,19 +290,14 @@ has them.
   brotli-compressed as they stand rather than re-encoded into the transform's streams.
   (On a small variable subset, where `gvar` and the layout tables dominate, it is
   actually a shade smaller.) See `crates/slice-core/src/font/woff2.rs` for the numbers.
-- **Variable positioning.** A font with a `GDEF` item variation store — variable kerning
-  and anchors — is refused for *partial* instancing, because leaving that data keeps
-  regions describing an axis space that no longer exists, and removing it dangles the
-  indices pointing into it. For *static* instances the table is carried through and
-  evaluates to its default, so kerning comes out at the default master's values rather
-  than the pinned location's; the run reports a note saying so rather than leaving it to
-  be discovered. fontTools instances these properly, and this should too.
-  (`GSUB`/`GPOS` *feature variations* — the conditional substitutions `rvrn` uses — **are**
-  resolved; it is only the positioning value store that is not.)
-  Measured against `google/fonts`, this refusal blocks partial instancing on **365 of the
-  706 variable fonts that have an axis worth narrowing — 52%**, of which 184 have more
-  than one axis. It is the largest gap in the program by a wide margin; see
-  [docs/real-world-sweep.md](docs/real-world-sweep.md).
+- **Variable positioning at a moved default.** A `GDEF` item variation store --
+  variable kerning and anchors -- is re-tented onto the narrowed axes along with
+  everything else, so partial instancing works on fonts that carry one. The one case
+  still refused is a rebuild that would leave a non-zero residual at the new default
+  location, which cannot happen under Level 3 sub-spacing because the default never
+  moves; the code checks rather than assumes, and names the subtable if it ever fires.
+  (`GSUB`/`GPOS` *feature variations* -- the conditional substitutions `rvrn` uses --
+  are resolved as well.)
 - **`MVAR` across a restricted range.** Applied at the new default and then dropped, so
   vertical metrics are right there but stop varying across whatever range is left.
 - **`avar` version 2.** Refused for partial instancing.
