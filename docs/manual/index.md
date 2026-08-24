@@ -72,6 +72,45 @@ exactly what the three editors would show. Full reference in the *Command line* 
 A font with no `fvar` table is not a variable font and is refused at step 1, with a message
 saying so. There is nothing Slice could do to such a font but copy it.
 
+## Keeping a slice you will want again
+
+Two things remember what you did, and neither of them sends anything anywhere.
+
+### The address bar
+
+After a successful slice, the page's own address describes it:
+
+    ?axes=wght=700,CASL=0:1&n2=Bold&format=woff2
+
+Bookmark the page and the bookmark is the recipe. Open it later and the editors fill
+themselves in; open it with a *different* font and whatever still applies is restored, so
+a bookmark that pins a weight works on the next family too. Axes the font does not have
+are ignored rather than complained about.
+
+Only what you changed is recorded. The Name Editor arrives prefilled from the font, so
+rows you left alone are not carried — that keeps the address short enough to read, and
+loading the font restores them anyway.
+
+It is an ordinary URL, so you can edit it by hand: the part after `axes=` is exactly the
+syntax the Axis Editor takes.
+
+### Fonts opened before
+
+Fonts you have sliced are offered again on the next visit, under **Opened before**, with
+the settings you last used on them. Choosing one is not "open that file again" — the font
+and its settings come back together, which for a job you repeat is two clicks instead of a
+file dialogue and five fields.
+
+They are held in your browser's own storage, on your machine, and never uploaded; the page
+has no server to upload them to. The list keeps the twelve most recent, up to a total of
+120 MB, and drops the least recently used beyond that. A font larger than 40 MB is used
+normally but not remembered.
+
+**Forget all** clears the lot. Individual entries have a **×**.
+
+If your browser refuses storage — Firefox in private browsing does — nothing is
+remembered and the panel does not appear. Slicing is unaffected.
+
 ## The Axis Editor
 
 One row per axis. The left column is fixed and shows what the font supports, in the form
