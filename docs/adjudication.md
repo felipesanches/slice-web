@@ -20,13 +20,13 @@ that produces it, so it can be re-run.
 
 ## Scoreboard
 
-Against the 297-case corpus, 17 of which need overlap removal that the original never had
+Against the 298-case corpus, 17 of which need overlap removal that the original never had
 and which are therefore not counted against it:
 
 | | passed | failed | needs a feature it lacks |
 |---|---|---|---|
-| the original | 230 | 50 | 17 |
-| this implementation | 297 | 0 | 0 |
+| the original | 231 | 50 | 17 |
+| this implementation | 298 | 0 | 0 |
 
 An earlier revision of this file recorded seven failures here, all CFF: this
 implementation refused CFF outlines and the original, delegating to fontTools'

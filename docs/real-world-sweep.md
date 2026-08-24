@@ -4,7 +4,7 @@ title: "What happens on 775 real fonts"
 description: "Slicing 775 real variable fonts from Google Fonts"
 ---
 
-The conformance corpus in `tests/suite/` is 297 cases over 14 fixtures, thirteen of them
+The conformance corpus in `tests/suite/` is 298 cases over 14 fixtures, thirteen of them
 synthetic. Passing all of it says the program does what we thought to ask for. This is the
 other question: pointed at fonts nobody designed a test around, does it crash, does it
 produce a readable font, and does that font agree with fontTools?

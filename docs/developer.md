@@ -57,11 +57,11 @@ partial, CFF2, and the sub-space `solver`), `overlaps.rs` (the boolean union) an
 ## Running the tests
 
 ```sh
-cargo test --workspace              # 175 tests
+cargo test --workspace              # 174 tests
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 
-tests/suite/run.py                  # 297 conformance cases, both implementations
+tests/suite/run.py                  # 298 conformance cases, both implementations
 tests/suite/run.py --runner ours    # just this one
 tests/suite/run.py --case axis.     # filter by id prefix
 tests/suite/run.py --verbose        # per-check detail on failures

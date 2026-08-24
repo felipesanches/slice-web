@@ -335,7 +335,7 @@ Every behavioural claim in this manual is tested, and the tests are readable:
 - **[Adjudication](https://felipesanches.github.io/slice-web/adjudication.html)** — every
   case the original Slice fails, with the measurement behind each verdict.
 - **[The real-world sweep](https://felipesanches.github.io/slice-web/real-world-sweep.html)**
-  — what happens on 775 real variable fonts from Google Fonts: 133,483 glyphs compared
+  — what happens on 775 real variable fonts from Google Fonts: 177,154 glyphs compared
   against fontTools with no disagreements.
 - **[The behaviour map](https://felipesanches.github.io/slice-web/original-behaviour.html)**
   — the numbered map of the original program's behaviour that the suite is written against.

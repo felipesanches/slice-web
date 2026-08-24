@@ -66,8 +66,8 @@ On Windows use PowerShell and `cargo build --release -p slice-cli`; the binary i
 ## Verifying a build
 
 ```sh
-cargo test --workspace       # 175 tests
-tests/suite/run.py           # the 297-case conformance corpus, both implementations
+cargo test --workspace       # 174 tests
+tests/suite/run.py           # the 298-case conformance corpus, both implementations
 ```
 
 The corpus bootstraps its own virtual environment with PyQt5 and fontTools on first run,

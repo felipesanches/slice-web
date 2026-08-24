@@ -60,9 +60,10 @@ Two findings beyond the pass/fail:
 - **It reports hole nesting.** Each returned `Contour` carries a `parent`, so holes are
   described explicitly rather than left to be recovered from winding direction.
   `overlaps.rs` currently reconstructs that by ray-casting a boundary point per contour.
-- **It needs kurbo 0.13.** Slice is on 0.11.3, and the two are semver-incompatible, so
-  adopting `linesweeper` means upgrading kurbo across the workspace. That is the main
-  cost, and it is not specific to this crate.
+- **It needs kurbo 0.13**, where Slice was on 0.11.3 when this was written. The two are
+  semver-incompatible, so adopting `linesweeper` meant upgrading kurbo across the
+  workspace. That turned out to cost nothing — kurbo was used in one file — and the
+  upgrade landed with the switch.
 
 ## What this does not tell you
 
