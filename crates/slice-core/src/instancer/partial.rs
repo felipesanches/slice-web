@@ -876,9 +876,16 @@ pub fn build_stat(
             }
         })
     };
+    // An `AxisValue` names its axis by index into the design-axis array. An index past
+    // the end of that array does not describe anything, so the record is dropped rather
+    // than copied through. Real fonts do carry this: `OpenSansCondensed-Italic[wght].ttf`
+    // in google/fonts' axisregistry test data has a two-axis STAT with a record naming
+    // axis 2, and fontTools 4.62.1 raises `IndexError: list index out of range` on it.
+    // Surviving where the reference crashes is only worth something if the corruption is
+    // removed rather than passed on.
     let outside = |axis_index: u16, value: f64| -> bool {
         let Some(axis) = design_axes.get(axis_index as usize) else {
-            return false;
+            return true;
         };
         match extent(axis.axis_tag()) {
             Some((min, max)) => value < min || value > max,
@@ -937,8 +944,9 @@ fn keep_axis_value(
         }),
         R::Format4(v) => {
             // A format 4 record names one point across several axes at once. If any of
-            // them is out of reach the record no longer describes a location the font
-            // has, so the whole record goes rather than being quietly reduced.
+            // them is out of reach -- or names an axis the design-axis array does not
+            // have -- the record no longer describes a location the font has, so the
+            // whole record goes rather than being quietly reduced.
             let records: Vec<w::AxisValueRecord> = v
                 .axis_values()
                 .iter()
