@@ -27,7 +27,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -49,8 +49,16 @@ jobs:
 
       - name: Place the application at /app/
         run: |
+          # `jekyll-build-pages` is a Docker action, so it runs as root inside the
+          # container and leaves `_site` owned by root. Every later step runs as the
+          # `runner` user, which cannot write into it -- `mkdir _site/app` fails with
+          # "Permission denied". Take ownership first, then everything else is ordinary.
+          sudo chown -R "$(id -u):$(id -g)" _site
+
           mkdir -p _site/app
           cp -r dist/. _site/app/
+
+          # Fail loudly rather than publishing a site with a hole in it.
           test -f _site/app/index.html
           test -f _site/app/pkg/slice_web_bg.wasm
           test -f _site/index.html
