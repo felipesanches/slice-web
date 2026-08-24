@@ -312,7 +312,6 @@ fn read_tuples(
 
 /// Build a partially instanced font.
 pub fn instantiate_partial(font: &FontRef, plans: &[AxisPlan]) -> Result<Vec<u8>, SliceError> {
-    refuse_unsupported_variation_tables(font)?;
     if font.glyf().is_ok() {
         return partial_glyf(font, plans);
     }
@@ -689,16 +688,6 @@ fn finish_partial<'a>(
     super::statics::copy_remaining_tables(out, font, REPLACED);
 
     Ok(std::mem::take(out).build())
-}
-
-/// Refuse fonts whose variation data this cannot rewrite.
-///
-/// Producing a font that is subtly wrong is worse than producing none, and both
-/// alternatives here are subtly wrong: leaving these tables keeps regions that describe
-/// an axis space that no longer exists, and removing them leaves the indices that point
-/// into them dangling.
-fn refuse_unsupported_variation_tables(font: &FontRef) -> Result<(), SliceError> {
-    Ok(())
 }
 
 /// Rebuild `fvar` over the surviving axes.
