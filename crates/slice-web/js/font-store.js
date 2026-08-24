@@ -78,12 +78,16 @@ export async function listFonts() {
     }
     const records = await promised(db.transaction(STORE, "readonly").objectStore(STORE).getAll());
     return records
-        .map(({ id, name, family, settings, used, size }) => ({
+        .map(({ id, name, family, version, settings, used, added, size }) => ({
             id,
             name,
             family,
+            version: version ?? "",
             settings,
             used,
+            // Records written before `added` existed report their last use instead, which
+            // is the best available answer and never claims a font is older than it is.
+            added: added ?? used,
             size,
         }))
         .sort((a, b) => b.used - a.used);
@@ -108,7 +112,7 @@ export async function getFont(id) {
  * the font is already loaded and working, and "your browser would not let me remember
  * this" is not something to interrupt someone with.
  */
-export async function putFont(id, name, family, bytes, settings) {
+export async function putFont(id, name, family, version, bytes, settings) {
     if (bytes.byteLength > MAX_ONE_BYTES) return false;
     let db;
     try {
@@ -123,14 +127,24 @@ export async function putFont(id, name, family, bytes, settings) {
 
     try {
         const store = db.transaction(STORE, "readwrite").objectStore(STORE);
+        // `added` is when this copy of the font first arrived, and must survive every
+        // later write: it is what the staleness note is measured from, and a value that
+        // reset itself each time you sliced would never report anything as old.
+        const existing = await promised(store.get(id));
         await promised(
             store.put({
                 id,
                 name,
                 family,
-                settings,
+                version,
+                // An empty settings string means "no opinion" -- a font just dropped,
+                // before anything has been typed into the editors. Keeping what is
+                // already stored means opening a remembered font does not erase the
+                // settings that made it worth remembering.
+                settings: settings || existing?.settings || "",
                 buffer,
                 size: buffer.byteLength,
+                added: existing?.added ?? Date.now(),
                 used: Date.now(),
             }),
         );

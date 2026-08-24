@@ -27,7 +27,10 @@ pub fn App() -> impl IntoView {
     let accept_file = move |file: web_sys::File| {
         spawn_local(async move {
             match files::read_file(file).await {
-                Ok((name, bytes)) => state.load_font(name, bytes),
+                Ok((name, bytes)) => {
+                    state.load_font(name, bytes);
+                    remember(state);
+                }
                 Err(message) => state.report("The file could not be read.", Some(message)),
             }
         });
@@ -47,7 +50,10 @@ pub fn App() -> impl IntoView {
     let load_sample = Callback::new(move |_: ()| {
         spawn_local(async move {
             match files::fetch_same_origin(files::SAMPLE_PATH).await {
-                Ok(bytes) => state.load_font(files::SAMPLE_NAME.to_string(), bytes),
+                Ok(bytes) => {
+                    state.load_font(files::SAMPLE_NAME.to_string(), bytes);
+                    remember(state);
+                }
                 Err(message) => state.report("The sample font could not be loaded.", Some(message)),
             }
         });
@@ -225,6 +231,39 @@ pub fn App() -> impl IntoView {
     }
 }
 
+/// Remember the loaded font, with whatever the editors currently say.
+///
+/// Called when a font arrives and again when one is sliced. The first is what puts it in
+/// the list at all -- and what dates it, since "when did I get this copy" is a question
+/// about the file arriving, not about anything done to it afterwards. The second attaches
+/// the settings; an empty settings string is treated by the store as "no opinion", so the
+/// arrival does not erase what a previous session left there.
+///
+/// What is kept is the decoded sfnt, so a WOFF2 that was opened comes back as a plain
+/// sfnt; the output format travels in the settings, so recalling it and pressing Slice
+/// still produces a WOFF2.
+fn remember(state: AppState) {
+    let file_name = state.file_name.get_untracked();
+    let query = state.capture_settings().to_query();
+    let details = state.font.with_untracked(|font| {
+        font.as_ref().map(|font| {
+            (
+                font.data().to_vec(),
+                font.family_name().unwrap_or_default(),
+                font.version().unwrap_or_default(),
+            )
+        })
+    });
+    let Some((bytes, family, version)) = details else {
+        return;
+    };
+    spawn_local(async move {
+        let id = crate::recent::identity(&file_name, &family, &bytes);
+        crate::recent::put(&id, &file_name, &family, &version, &bytes, &query).await;
+        state.recent.set(crate::recent::list().await);
+    });
+}
+
 /// Fonts opened before, offered for instant recall.
 ///
 /// This replaces a lone "try the sample" link, which was only ever useful once. What is
@@ -257,39 +296,59 @@ fn RecentFonts(
                         let:font
                     >
                         {
+                            // Everything the row shows, worked out before the view so the
+                            // closures inside it do not have to share ownership of one
+                            // record between an event handler, two `Show` predicates and
+                            // half a dozen text nodes.
                             let id = font.id.clone();
                             let forget_id = font.id.clone();
+                            let file_name = font.name.clone();
+                            let label = font.label().to_string();
+                            let aria = format!("Forget {label}");
+                            let version = font.version.clone();
+                            let has_version = !version.is_empty();
+                            let when = font.added_label();
+                            let age = font.age_label();
+                            let stale = font.is_stale();
+                            let stale_note =
+                                format!("Cached {age} — worth checking for a newer release");
+
                             let settings = crate::settings::Settings::from_query(&font.settings);
-                            let summary = if settings.axes.is_empty() {
-                                String::new()
+                            let detail = if settings.axes.is_empty() {
+                                font.size_label()
                             } else {
-                                settings
+                                let axes = settings
                                     .axes
                                     .iter()
                                     .map(|(tag, value)| format!("{tag} {value}"))
                                     .collect::<Vec<_>>()
-                                    .join(", ")
+                                    .join(", ");
+                                format!("{axes} · {}", font.size_label())
                             };
+
                             view! {
-                                <li>
+                                <li class:stale=move || stale>
                                     <button
                                         class="recall"
-                                        title=font.name.clone()
+                                        title=file_name
                                         on:click=move |_| recall.run(id.clone())
                                     >
-                                        <span class="label">{font.label().to_string()}</span>
-                                        <span class="detail">
-                                            {if summary.is_empty() {
-                                                font.size_label()
-                                            } else {
-                                                format!("{summary} · {}", font.size_label())
-                                            }}
+                                        <span class="label">
+                                            {label}
+                                            <Show when=move || has_version>
+                                                <span class="version">{version.clone()}</span>
+                                            </Show>
                                         </span>
+                                        <span class="detail">{detail}</span>
+                                        <span class="when" title=age>{when}</span>
+                                        <Show when=move || stale>
+                                            <span class="note">{stale_note.clone()}</span>
+                                        </Show>
                                     </button>
                                     <button
                                         class="forget"
                                         title="Forget this font"
-                                        aria-label=format!("Forget {}", font.label())
+                                        aria-label=aria
                                         on:click=move |_| forget.run(forget_id.clone())
                                     >
                                         "\u{00d7}"
@@ -492,27 +551,9 @@ fn perform(state: AppState) {
                     let settings = state.capture_settings();
                     crate::settings::write_to_location(&settings);
 
-                    // Remember the font *now* rather than when it was opened: a font
-                    // someone actually sliced is one they are likely to slice again, and
-                    // the settings to store alongside it only exist at this point.
-                    //
-                    // What is kept is the decoded sfnt, so a WOFF2 that was opened comes
-                    // back as a plain sfnt. The output format is part of the settings, so
-                    // recalling it and pressing Slice still produces a WOFF2.
-                    let query = settings.to_query();
-                    let file_name = state.file_name.get_untracked();
-                    let remembered = state.font.with_untracked(|font| {
-                        font.as_ref().map(|font| {
-                            (font.data().to_vec(), font.family_name().unwrap_or_default())
-                        })
-                    });
-                    if let Some((bytes, family)) = remembered {
-                        spawn_local(async move {
-                            let id = crate::recent::identity(&file_name, &family, &bytes);
-                            crate::recent::put(&id, &file_name, &family, &bytes, &query).await;
-                            state.recent.set(crate::recent::list().await);
-                        });
-                    }
+                    // Store the settings against the font, so recalling it resumes
+                    // here rather than at the font's own defaults.
+                    remember(state);
 
                     let mut notes = output.notes;
                     if !settings.is_empty() {

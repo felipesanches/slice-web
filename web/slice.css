@@ -779,3 +779,32 @@ button.linklike {
 .recent .forget:hover { background: var(--danger-soft); color: var(--danger); }
 .recent h3 { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
 .recent .forget-all { font-size: 0.72rem; letter-spacing: 0; text-transform: none; }
+
+.recent .recall .label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.recent .version {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: var(--ink-faint);
+}
+.recent .when {
+  font-size: 0.68rem;
+  color: var(--ink-faint);
+}
+/* The staleness note is advice, not a failure: it uses the warning colours rather than
+   the error ones, and the row stays perfectly usable. */
+.recent li.stale { border-color: var(--warn-line); }
+.recent .note {
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+  background: var(--warn-soft);
+  border: 1px solid var(--warn-line);
+  border-radius: 4px;
+  padding: 0.08rem 0.35rem;
+  margin-top: 0.15rem;
+}

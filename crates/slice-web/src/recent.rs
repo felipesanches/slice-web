@@ -11,6 +11,9 @@
 //! Nothing leaves the machine: IndexedDB is per-origin browser storage, and this page has
 //! no server to send it to.
 
+/// How long a cached copy may sit before the interface suggests checking upstream.
+pub const STALE_AFTER_DAYS: f64 = 14.0;
+
 use serde::Deserialize;
 use wasm_bindgen::prelude::*;
 
@@ -27,6 +30,7 @@ extern "C" {
         id: &str,
         name: &str,
         family: &str,
+        version: &str,
         bytes: &[u8],
         settings: &str,
     ) -> Result<JsValue, JsValue>;
@@ -46,8 +50,12 @@ pub struct RecentFont {
     pub name: String,
     /// The family name out of the font, which is usually the more recognisable of the two.
     pub family: String,
+    /// The `name` table's version string, nameID 5, as the font reports itself.
+    pub version: String,
     /// The settings last used with it, as a query string.
     pub settings: String,
+    /// Milliseconds since the epoch, when this copy of the font first arrived.
+    pub added: f64,
     pub size: f64,
 }
 
@@ -58,6 +66,43 @@ impl RecentFont {
             &self.name
         } else {
             &self.family
+        }
+    }
+
+    /// How long ago this copy arrived, and whether that is long enough to mention.
+    ///
+    /// A cached font is a copy of a file that has a life of its own: the foundry ships a
+    /// new version, the repository gets a fix, and the copy here goes quietly out of date
+    /// with nothing to say so. After a fortnight it is worth a nudge — long enough not to
+    /// nag about a font opened last Tuesday, short enough to catch a release.
+    pub fn is_stale(&self) -> bool {
+        self.age_days() >= STALE_AFTER_DAYS
+    }
+
+    pub fn age_days(&self) -> f64 {
+        let now = js_sys::Date::now();
+        ((now - self.added) / (1000.0 * 60.0 * 60.0 * 24.0)).max(0.0)
+    }
+
+    /// When it arrived, in the reader's own locale and time zone.
+    pub fn added_label(&self) -> String {
+        let date = js_sys::Date::new(&JsValue::from_f64(self.added));
+        let day = date.to_locale_date_string("default", &JsValue::UNDEFINED);
+        let time = date.to_locale_time_string("default");
+        format!("{day} {time}")
+    }
+
+    /// "3 days ago", for the tooltip, where the exact stamp is already shown.
+    pub fn age_label(&self) -> String {
+        let days = self.age_days();
+        if days < 1.0 {
+            "today".to_string()
+        } else if days < 2.0 {
+            "yesterday".to_string()
+        } else if days < 60.0 {
+            format!("{:.0} days ago", days)
+        } else {
+            format!("{:.0} months ago", days / 30.0)
         }
     }
 
@@ -106,8 +151,8 @@ pub async fn get(id: &str) -> Option<Vec<u8>> {
 
 /// Remember a font. Failure is deliberately invisible: the font is already open and
 /// working, and a browser that will not persist it is not something to interrupt over.
-pub async fn put(id: &str, name: &str, family: &str, bytes: &[u8], settings: &str) {
-    let _ = put_font_js(id, name, family, bytes, settings).await;
+pub async fn put(id: &str, name: &str, family: &str, version: &str, bytes: &[u8], settings: &str) {
+    let _ = put_font_js(id, name, family, version, bytes, settings).await;
 }
 
 pub async fn forget(id: &str) {

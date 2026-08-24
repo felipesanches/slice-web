@@ -96,10 +96,20 @@ syntax the Axis Editor takes.
 
 ### Fonts opened before
 
-Fonts you have sliced are offered again on the next visit, under **Opened before**, with
+Fonts you have opened are offered again on the next visit, under **Opened before**, with
 the settings you last used on them. Choosing one is not "open that file again" — the font
 and its settings come back together, which for a job you repeat is two clicks instead of a
 file dialogue and five fields.
+
+Each entry shows the family name, the font's own version string from its `name` table, the
+axis settings last used, the size, and when that copy arrived.
+
+> **After a fortnight, an entry says so.** A cached font is a copy of a file that has a
+> life of its own: the foundry ships a new version, the repository gets a fix, and the copy
+> here goes quietly out of date with nothing to say so. An entry older than two weeks
+> carries *"Cached 30 days ago — worth checking for a newer release"*. It is advice, not a
+> failure: the font still works and still slices. The version string next to the name is
+> what to compare against upstream.
 
 They are held in your browser's own storage, on your machine, and never uploaded; the page
 has no server to upload them to. The list keeps the twelve most recent, up to a total of
