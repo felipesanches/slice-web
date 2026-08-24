@@ -42,6 +42,9 @@ pub struct AppState {
     pub busy: RwSignal<bool>,
     /// The notes from the last successful slice.
     pub last_result: RwSignal<Vec<String>>,
+    /// Fonts opened before, most recently used first. Lives here rather than in `App` so
+    /// that the slice path, which is a free function, can refresh it after storing one.
+    pub recent: RwSignal<Vec<crate::recent::RecentFont>>,
 }
 
 impl Default for AppState {
@@ -66,6 +69,7 @@ impl AppState {
             about_open: RwSignal::new(false),
             busy: RwSignal::new(false),
             last_result: RwSignal::new(Vec::new()),
+            recent: RwSignal::new(Vec::new()),
         }
     }
 
@@ -164,8 +168,8 @@ impl AppState {
         }
         Ok(SliceJob {
             limits,
-            names: self.names.get(),
-            bits: self.bits.get(),
+            names: self.changed_names(),
+            bits: self.changed_bits(),
             remove_overlaps: self.remove_overlaps.get(),
             format: self.format.get(),
         })
@@ -228,10 +232,53 @@ impl AppState {
                     (!entry.is_empty()).then(|| (axis.tag.clone(), entry.to_string()))
                 })
                 .collect(),
-            names: self.names.get(),
-            bits: self.bits.get(),
+            names: self.changed_names(),
+            bits: self.changed_bits(),
             remove_overlaps: self.remove_overlaps.get(),
             format: self.format.get(),
+        }
+    }
+
+    /// Only the name rows the user actually altered.
+    ///
+    /// The Name Editor is prefilled from the font, so capturing it wholesale would put
+    /// five records into every URL and leave a bookmark nobody can read -- and a bookmark
+    /// nobody can read is most of the value gone. A row that still matches the font is
+    /// restored by loading the font, so it does not need carrying.
+    ///
+    /// A row the user *cleared* is a change, and is carried as an empty value so that
+    /// applying the settings clears it again rather than letting the font's own value
+    /// reappear.
+    fn changed_names(&self) -> NameEdits {
+        let current = self.names.get();
+        let Some(original) = self.font.with(|font| font.as_ref().map(|f| f.name_edits())) else {
+            return current;
+        };
+        let mut out = NameEdits::new();
+        for id in slice_core::names::NAME_EDITOR_IDS {
+            let now = current.get(*id).unwrap_or_default();
+            let was = original.get(*id).unwrap_or_default();
+            if now != was {
+                out.set(*id, now);
+            }
+        }
+        out
+    }
+
+    /// The bit fields, or zero when they still match the font.
+    ///
+    /// Same reasoning: `fs=192` in every URL is noise when 192 is simply what the font
+    /// says. Zero is the "nothing to say" value, and a user who genuinely clears every
+    /// exposed bit is recorded by the fields differing from the font's.
+    fn changed_bits(&self) -> BitFlags {
+        let current = self.bits.get();
+        let Some(original) = self.font.with(|font| font.as_ref().map(|f| f.bit_flags())) else {
+            return current;
+        };
+        if current == original {
+            BitFlags::default()
+        } else {
+            current
         }
     }
 

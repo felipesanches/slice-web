@@ -132,6 +132,17 @@ pub fn AboutDialog(state: AppState) -> impl IntoView {
                                 "fontTools"
                             </a>
                         </li>
+                        <li>
+                            "Fonts are remembered between visits with code adapted from "
+                            <a
+                                href="https://github.com/FontBureau/TypeRoof"
+                                target="_blank"
+                                rel="noreferrer"
+                            >
+                                "TypeRoof"
+                            </a>
+                            " by Font Bureau, under the Apache License 2.0"
+                        </li>
                         // The application ships the icon, so its attribution has to be
                         // reachable from inside the application, not only from the
                         // repository's thirdparty/ directory.

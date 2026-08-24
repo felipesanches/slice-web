@@ -284,6 +284,7 @@ body {
   border-radius: var(--radius);
   padding: 0.85rem 1rem;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   min-height: 4.1rem;
   background: var(--panel-alt);
@@ -706,3 +707,75 @@ button.linklike {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+/* ------------------------------------------------- fonts opened before */
+
+.recent {
+  /* The dropzone is a centred flex row; this has to claim the whole width and sit
+     under the placeholder rather than beside it. */
+  flex-basis: 100%;
+  margin: 0.75rem 0 0;
+  border-top: 1px dashed var(--line);
+  padding-top: 0.7rem;
+}
+.recent h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.recent ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.recent li {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-alt);
+  overflow: hidden;
+}
+.recent li:hover { border-color: var(--line-strong); }
+
+.recent .recall {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  padding: 0.4rem 0.7rem;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.recent .recall:hover { background: var(--accent-soft); }
+.recent .recall .label { font-weight: 600; font-size: 0.92rem; }
+.recent .recall .detail {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+}
+
+/* A quiet control: destructive, so it should not be the thing the eye lands on. */
+.recent .forget {
+  border: none;
+  border-left: 1px solid var(--line);
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: 0 0.55rem;
+  font-size: 1rem;
+  line-height: 1;
+}
+.recent .forget:hover { background: var(--danger-soft); color: var(--danger); }
+.recent h3 { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+.recent .forget-all { font-size: 0.72rem; letter-spacing: 0; text-transform: none; }

@@ -53,6 +53,59 @@ pub fn App() -> impl IntoView {
         });
     });
 
+    // The remembered fonts, refreshed whenever the store changes underneath us.
+    let recent = state.recent;
+    spawn_local(async move {
+        recent.set(crate::recent::list().await);
+    });
+
+    // Choosing one loads the bytes *and* the settings that were last used with it, which
+    // is the difference between this and opening the file again.
+    let recall = Callback::new(move |id: String| {
+        spawn_local(async move {
+            let Some(bytes) = crate::recent::get(&id).await else {
+                // Evicted between the list being drawn and the click landing.
+                recent.set(crate::recent::list().await);
+                return;
+            };
+            let name = recent.with_untracked(|fonts| {
+                fonts
+                    .iter()
+                    .find(|f| f.id == id)
+                    .map(|f| f.name.clone())
+                    .unwrap_or_else(|| "font.ttf".to_string())
+            });
+            let settings = recent.with_untracked(|fonts| {
+                fonts
+                    .iter()
+                    .find(|f| f.id == id)
+                    .map(|f| f.settings.clone())
+                    .unwrap_or_default()
+            });
+            state.load_font(name, bytes);
+            if state.font.with_untracked(Option::is_some) && !settings.is_empty() {
+                let settings = crate::settings::Settings::from_query(&settings);
+                state.apply_settings(&settings);
+                crate::settings::write_to_location(&settings);
+            }
+        });
+    });
+
+    let forget = Callback::new(move |id: String| {
+        spawn_local(async move {
+            crate::recent::forget(&id).await;
+            recent.set(crate::recent::list().await);
+        });
+    });
+
+    // A tool that keeps copies of someone's fonts owes them a way to say stop.
+    let forget_all = Callback::new(move |_: ()| {
+        spawn_local(async move {
+            crate::recent::forget_all().await;
+            recent.set(crate::recent::list().await);
+        });
+    });
+
     // Settings the page was opened with, applied as soon as there is a font to apply them
     // to. Held rather than consumed, so that opening a second font restores them again --
     // a bookmarked weight is a thing you want for the next font too, and the address bar
@@ -135,7 +188,15 @@ pub fn App() -> impl IntoView {
             </header>
 
             <main>
-                <FontPathRow state=state open_dialog=open_dialog load_sample=load_sample dragging=dragging/>
+                <FontPathRow
+                    state=state
+                    open_dialog=open_dialog
+                    load_sample=load_sample
+                    recall=recall
+                    forget=forget
+                    forget_all=forget_all
+                    dragging=dragging
+                />
                 <AxisEditor state=state/>
                 <NameEditor state=state/>
                 <BitFlagEditor state=state/>
@@ -164,12 +225,94 @@ pub fn App() -> impl IntoView {
     }
 }
 
+/// Fonts opened before, offered for instant recall.
+///
+/// This replaces a lone "try the sample" link, which was only ever useful once. What is
+/// recalled is the font *and* the settings last used with it, so a weekly job of cutting
+/// the same three instances is two clicks rather than a file dialogue and five fields.
+///
+/// The panel is absent, rather than empty, when there is nothing to show -- on a first
+/// visit, and in a browser that will not give the page any storage.
+#[component]
+fn RecentFonts(
+    state: AppState,
+    recall: Callback<String>,
+    forget: Callback<String>,
+    forget_all: Callback<()>,
+) -> impl IntoView {
+    let recent = state.recent;
+    view! {
+        <Show when=move || !recent.get().is_empty()>
+            <div class="recent">
+                <h3>
+                    "Opened before"
+                    <button class="linklike forget-all" on:click=move |_| forget_all.run(())>
+                        "Forget all"
+                    </button>
+                </h3>
+                <ul>
+                    <For
+                        each=move || recent.get()
+                        key=|font| font.id.clone()
+                        let:font
+                    >
+                        {
+                            let id = font.id.clone();
+                            let forget_id = font.id.clone();
+                            let settings = crate::settings::Settings::from_query(&font.settings);
+                            let summary = if settings.axes.is_empty() {
+                                String::new()
+                            } else {
+                                settings
+                                    .axes
+                                    .iter()
+                                    .map(|(tag, value)| format!("{tag} {value}"))
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            };
+                            view! {
+                                <li>
+                                    <button
+                                        class="recall"
+                                        title=font.name.clone()
+                                        on:click=move |_| recall.run(id.clone())
+                                    >
+                                        <span class="label">{font.label().to_string()}</span>
+                                        <span class="detail">
+                                            {if summary.is_empty() {
+                                                font.size_label()
+                                            } else {
+                                                format!("{summary} · {}", font.size_label())
+                                            }}
+                                        </span>
+                                    </button>
+                                    <button
+                                        class="forget"
+                                        title="Forget this font"
+                                        aria-label=format!("Forget {}", font.label())
+                                        on:click=move |_| forget.run(forget_id.clone())
+                                    >
+                                        "\u{00d7}"
+                                    </button>
+                                </li>
+                            }
+                        }
+                    </For>
+                </ul>
+            </div>
+        </Show>
+    }
+}
+
 /// The font path row: a drop target and an Open button.
 #[component]
 fn FontPathRow(
     state: AppState,
     open_dialog: Callback<()>,
     load_sample: Callback<()>,
+    recall: Callback<String>,
+    forget: Callback<String>,
+    forget_all: Callback<()>,
     dragging: RwSignal<bool>,
 ) -> impl IntoView {
     view! {
@@ -185,6 +328,7 @@ fn FontPathRow(
                                     "Try the sample font"
                                 </button>
                             </p>
+                            <RecentFonts state=state recall=recall forget=forget forget_all=forget_all/>
                         }
                     }
                 >
@@ -347,6 +491,28 @@ fn perform(state: AppState) {
                     // is one you cannot copy.
                     let settings = state.capture_settings();
                     crate::settings::write_to_location(&settings);
+
+                    // Remember the font *now* rather than when it was opened: a font
+                    // someone actually sliced is one they are likely to slice again, and
+                    // the settings to store alongside it only exist at this point.
+                    //
+                    // What is kept is the decoded sfnt, so a WOFF2 that was opened comes
+                    // back as a plain sfnt. The output format is part of the settings, so
+                    // recalling it and pressing Slice still produces a WOFF2.
+                    let query = settings.to_query();
+                    let file_name = state.file_name.get_untracked();
+                    let remembered = state.font.with_untracked(|font| {
+                        font.as_ref().map(|font| {
+                            (font.data().to_vec(), font.family_name().unwrap_or_default())
+                        })
+                    });
+                    if let Some((bytes, family)) = remembered {
+                        spawn_local(async move {
+                            let id = crate::recent::identity(&file_name, &family, &bytes);
+                            crate::recent::put(&id, &file_name, &family, &bytes, &query).await;
+                            state.recent.set(crate::recent::list().await);
+                        });
+                    }
 
                     let mut notes = output.notes;
                     if !settings.is_empty() {

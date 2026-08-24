@@ -8,6 +8,19 @@ this version is recognisable as the same tool. It is itself a derivative of the
 flaticon.com, used under the Flaticon license, which permits commercial and personal use,
 modification and derivative works. See [Flaticon-License.txt](Flaticon-License.txt).
 
+## TypeRoof
+
+`crates/slice-web/js/font-store.js` is adapted from `lib/js/local-font-storage.mjs` in
+[TypeRoof](https://github.com/FontBureau/TypeRoof) by Font Bureau, used under the Apache
+License 2.0. The structure is theirs: a promise-wrapped IndexedDB handle, one object store
+keyed by a stable name, and the font's bytes kept in the record. Slice stores the slicing
+settings alongside the bytes, evicts by least-recent use, and returns plain objects
+because the caller is WebAssembly rather than JavaScript. See
+[Apache-2.0.txt](Apache-2.0.txt).
+
+Apache-2.0 is one-way compatible with the GNU General Public License v3, which is why this
+combination is permitted; the resulting work is distributed under the GPL.
+
 ## Recursive
 
 `web/fonts/RecursiveSans-Slice_mod.subset.ttf` and the fonts in `testdata/fonts/` are
