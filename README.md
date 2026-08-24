@@ -18,6 +18,23 @@ and handed straight back as a download. There is no server, and nothing to uploa
                                                         + remove overlaps
 ```
 
+## Documentation
+
+| | |
+|---|---|
+| **[User's manual](https://OWNER.github.io/slice-web/)** | How to use Slice, start to finish: the three editors, the axis syntax, overlap removal, the command line, and what every error message means |
+| [User's manual (PDF)](docs/manual/slice-manual.pdf) | The same manual, typeset — 10 pages |
+| [Test suite in plain English](docs/test-suite.md) | All 297 conformance cases and the reasoning behind each |
+| [Adjudication](docs/adjudication.md) | Every case the original Slice fails, and the measurement behind each verdict |
+| [Real-world sweep](docs/real-world-sweep.md) | What happens on 775 real variable fonts from Google Fonts |
+| [Behaviour map](docs/original-behaviour.md) | The numbered map of the original program that the suite is written against |
+| [How the corpus works](tests/suite/README.md) | Writing a case, the check kinds, the fixtures |
+| [Probes and harnesses](tools/README.md) | The scripts behind every measured number in these documents |
+
+The manual is generated from a single source: edit `docs/manual/manual.md` and run
+`docs/manual/build.py`, which writes the LaTeX, the PDF and the GitHub Pages copy together
+so they cannot drift apart.
+
 ## Why
 
 Slice takes a variable font and gives you a smaller one: a single static instance, or a

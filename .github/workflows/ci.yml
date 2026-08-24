@@ -93,3 +93,23 @@ jobs:
       # without regenerating it would ship an incomplete description of the suite.
       - name: Test-suite documentation is up to date
         run: tests/suite/gen-docs.py --check
+
+  manual:
+    name: Manual
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update && sudo apt-get install -y texlive-latex-recommended texlive-fonts-recommended
+
+      # The PDF, the .tex and the GitHub Pages copy are all generated from
+      # docs/manual/manual.md. Editing the source without rebuilding would publish a
+      # manual that disagrees with itself, which is worse than one merely out of date.
+      - name: The manual is up to date
+        run: docs/manual/build.py --check
+
+      # And that it still typesets: --check only compares the committed files.
+      - name: The manual still builds
+        run: docs/manual/build.py && git diff --exit-code docs/
