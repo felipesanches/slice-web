@@ -18,12 +18,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aliasable"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "250f629c0161ad8107cf89319e990051fae62832fd343083bea452d93e2205fd"
-
-[[package]]
 name = "alloc-no-stdlib"
 version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -110,6 +104,9 @@ name = "arrayvec"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "async-lock"
@@ -289,7 +286,7 @@ version = "4.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d012d2b9d65aca7f18f4d9878a045bc17899bba951561ba5ec3c2ba1eed9a061"
 dependencies = [
- "heck 0.5.0",
+ "heck",
  "proc-macro2",
  "quote",
  "syn 3.0.3",
@@ -522,18 +519,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "flo_curves"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09185b48758f5ae32e6927210f428dfa9ba5810e389562a8c7d653bc94337841"
-dependencies = [
- "itertools 0.11.0",
- "ouroboros",
- "roots",
- "smallvec",
-]
-
-[[package]]
 name = "font-types"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -710,12 +695,6 @@ checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
 name = "heck"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
-
-[[package]]
-name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
@@ -877,15 +856,6 @@ checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 
 [[package]]
 name = "itertools"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
@@ -927,17 +897,6 @@ checksum = "a4933f3f57a8e9d9da04db23fb153356ecaf00cbd14aee46279c33dc80925c37"
 
 [[package]]
 name = "kurbo"
-version = "0.11.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c62026ae44756f8a599ba21140f350303d4f08dcdcc71b5ad9c9bb8128c13c62"
-dependencies = [
- "arrayvec",
- "euclid",
- "smallvec",
-]
-
-[[package]]
-name = "kurbo"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b60dfc32f652b926df6192e55525b16d186c69d47876c3ead4da5cc9f8450e2"
@@ -945,6 +904,7 @@ dependencies = [
  "arrayvec",
  "euclid",
  "polycool",
+ "serde",
  "smallvec",
 ]
 
@@ -1045,7 +1005,7 @@ dependencies = [
  "convert_case 0.11.0",
  "convert_case_extras",
  "html-escape",
- "itertools 0.14.0",
+ "itertools",
  "leptos_hot_reload",
  "prettyplease",
  "proc-macro-error2",
@@ -1083,6 +1043,19 @@ name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
+
+[[package]]
+name = "linesweeper"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c19728333c060c6569a53c9a0e56c4be0df52cb4e6e07a8fbe16084cecce769"
+dependencies = [
+ "arrayvec",
+ "kurbo",
+ "polycool",
+ "rustc-hash",
+ "smallvec",
+]
 
 [[package]]
 name = "litemap"
@@ -1178,30 +1151,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c04f5d74368e4d0dfe06c45c8627c81bd7c317d52762d118fb9b3076f6420fd"
 
 [[package]]
-name = "ouroboros"
-version = "0.17.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2ba07320d39dfea882faa70554b4bd342a5f273ed59ba7c1c6b4c840492c954"
-dependencies = [
- "aliasable",
- "ouroboros_macro",
- "static_assertions",
-]
-
-[[package]]
-name = "ouroboros_macro"
-version = "0.17.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec4c6225c69b4ca778c0aea097321a64c421cf4577b331c61b229267edabb6f8"
-dependencies = [
- "heck 0.4.1",
- "proc-macro-error",
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1277,30 +1226,6 @@ checksum = "479ca8adacdd7ce8f1fb39ce9ecccbfe93a3f1344b3d0d97f20bc0196208f62b"
 dependencies = [
  "proc-macro2",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "proc-macro-error"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da25490ff9892aab3fcf7c36f08cfb902dd3e71ca0f9f9517bea02a73a5ce38c"
-dependencies = [
- "proc-macro-error-attr",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
- "version_check",
-]
-
-[[package]]
-name = "proc-macro-error-attr"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1be40180e52ecc98ad80b184934baf3d0d29f979574e439af5a55274b35f869"
-dependencies = [
- "proc-macro2",
- "quote",
- "version_check",
 ]
 
 [[package]]
@@ -1427,7 +1352,7 @@ checksum = "c30fd35b7d299c591293bb69fed47a703eb2703b1cff0493e78b16ed007e5382"
 dependencies = [
  "guardian",
  "indexmap",
- "itertools 0.14.0",
+ "itertools",
  "or_poisoned",
  "paste",
  "reactive_graph",
@@ -1488,12 +1413,6 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
-
-[[package]]
-name = "roots"
-version = "0.0.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "082f11ffa03bbef6c2c6ea6bea1acafaade2fd9050ae0234ab44a2153742b058"
 
 [[package]]
 name = "rstml"
@@ -1717,8 +1636,8 @@ name = "slice-core"
 version = "0.1.0"
 dependencies = [
  "brotli",
- "flo_curves",
- "kurbo 0.11.3",
+ "kurbo",
+ "linesweeper",
  "log",
  "miniz_oxide",
  "read-fonts",
@@ -1755,6 +1674,9 @@ name = "smallvec"
 version = "1.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "stable_deref_trait"
@@ -1763,26 +1685,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
-name = "static_assertions"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
-
-[[package]]
-name = "syn"
-version = "1.0.109"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72b64191b275b66ffe2469e8af2c1cfe3bafa67b529ead792a6d0160888b4237"
-dependencies = [
- "proc-macro2",
- "unicode-ident",
-]
 
 [[package]]
 name = "syn"
@@ -1844,7 +1750,7 @@ dependencies = [
  "futures",
  "html-escape",
  "indexmap",
- "itertools 0.14.0",
+ "itertools",
  "js-sys",
  "next_tuple",
  "oco_ref",
@@ -2187,7 +2093,7 @@ checksum = "843cebb7bd36359861dbce43d54ac8b33dfdf7b80a95913adc1ef7c7bb881e62"
 dependencies = [
  "font-types",
  "indexmap",
- "kurbo 0.13.1",
+ "kurbo",
  "log",
  "read-fonts",
 ]

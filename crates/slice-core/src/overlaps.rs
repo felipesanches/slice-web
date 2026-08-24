@@ -9,8 +9,9 @@
 //!
 //! The approach follows `fontTools.ttLib.removeOverlaps`: take a glyph's contours,
 //! union them, and write the result back. fontTools delegates the union to Skia's path
-//! ops via `skia-pathops`, which has no WebAssembly build; here it is `flo_curves`, which
-//! does the same job on Bézier paths in pure Rust.
+//! ops via `skia-pathops`, which has no WebAssembly build; here it is `linesweeper`,
+//! a robust Bentley--Ottmann sweep line that does the same job on Bézier paths in
+//! pure Rust.
 //!
 //! Both outline formats are handled, and the difference between them is in the last step
 //! rather than the union: the contours come out of skrifa, which draws `glyf` and `CFF2`
@@ -40,16 +41,10 @@ use write_fonts::tables::glyf::{Contour, GlyfLocaBuilder, Glyph as WGlyph, Simpl
 use write_fonts::types::{GlyphId, Tag};
 use write_fonts::{from_obj::ToOwnedTable, FontBuilder};
 
-use flo_curves::bezier::path::SimpleBezierPath;
-use flo_curves::geo::Coord2;
+use linesweeper::topology::ContourIdx;
+use linesweeper::{binary_op, BinaryOp, FillRule};
 
 use crate::SliceError;
-
-/// How closely the boolean operation must resolve intersections, in font units.
-///
-/// Coordinates are rounded to integers at the end, so resolving much finer than a tenth
-/// of a unit buys nothing and costs time.
-const BOOLEAN_ACCURACY: f64 = 0.01;
 
 /// How closely the cubic result must be refitted with quadratics, in font units.
 const QUAD_ACCURACY: f64 = 0.05;
@@ -383,7 +378,14 @@ fn merged_contours(
         return Ok(None);
     }
 
-    let merged_paths = union_nonzero(&contours, outer_clockwise);
+    // The sweep line reports the glyph it failed on through the caller, which knows it.
+    let merged_paths = union_nonzero(&contours, outer_clockwise).map_err(|e| match e {
+        SliceError::RemoveOverlaps { reason, .. } => SliceError::RemoveOverlaps {
+            glyph: format!("{}", gid.to_u32()),
+            reason,
+        },
+        other => other,
+    })?;
 
     if merged_paths.is_empty() {
         return Err(SliceError::RemoveOverlaps {
@@ -541,168 +543,73 @@ fn same_area(before: &[BezPath], after: &[BezPath]) -> bool {
     (a - b).abs() < 1.0
 }
 
-/// Convert a kurbo path to the cubic representation `flo_curves` works in.
-fn bezpath_to_flo(path: &BezPath) -> SimpleBezierPath {
-    let mut start = Coord2(0.0, 0.0);
-    let mut segments = Vec::new();
-    let mut current = Point::ZERO;
-    let mut started = false;
-
-    for element in path.elements() {
-        match *element {
-            PathEl::MoveTo(p) => {
-                start = Coord2(p.x, p.y);
-                current = p;
-                started = true;
-            }
-            PathEl::LineTo(p) => {
-                // A line is a cubic with its controls on the line.
-                let c1 = current.lerp(p, 1.0 / 3.0);
-                let c2 = current.lerp(p, 2.0 / 3.0);
-                segments.push((Coord2(c1.x, c1.y), Coord2(c2.x, c2.y), Coord2(p.x, p.y)));
-                current = p;
-            }
-            PathEl::QuadTo(q, p) => {
-                // Exact quadratic-to-cubic elevation.
-                let c1 = current + (q - current) * (2.0 / 3.0);
-                let c2 = p + (q - p) * (2.0 / 3.0);
-                segments.push((Coord2(c1.x, c1.y), Coord2(c2.x, c2.y), Coord2(p.x, p.y)));
-                current = p;
-            }
-            PathEl::CurveTo(c1, c2, p) => {
-                segments.push((Coord2(c1.x, c1.y), Coord2(c2.x, c2.y), Coord2(p.x, p.y)));
-                current = p;
-            }
-            PathEl::ClosePath => {
-                if started && (current.x != start.0 || current.y != start.1) {
-                    let end = Point::new(start.0, start.1);
-                    let c1 = current.lerp(end, 1.0 / 3.0);
-                    let c2 = current.lerp(end, 2.0 / 3.0);
-                    segments.push((Coord2(c1.x, c1.y), Coord2(c2.x, c2.y), start));
-                    current = end;
-                }
-            }
-        }
+/// Merge a glyph's contours into the outline of the region they fill.
+///
+/// `linesweeper` implements a robust Bentley--Ottmann sweep line over Bezier paths and
+/// takes the fill rule as an argument, so the whole operation is one call: the union of
+/// the glyph with nothing, evaluated under the non-zero rule, is the glyph normalized.
+///
+/// This replaced `flo_curves`, whose `path_remove_interior_points` looks like the right
+/// function and is not one. It documents itself as the non-zero rule, but
+/// `GraphPath::from_path` reverses every contour to a single direction before doing
+/// anything, so nothing can cancel: an 'o' came back as a solid blob. Driving its ray
+/// caster directly worked, at the cost of carrying per-contour labels, restoring the
+/// signs by signed area, and reconstructing nesting depth afterwards by ray-casting a
+/// point on each contour's boundary. All of that is gone.
+///
+/// The result comes back as contours with an explicit `parent`, so nesting depth is read
+/// off the tree rather than recovered from geometry. Depth still has to be turned into a
+/// direction, because `glyf` and `CFF` are filled with the non-zero rule and disagree
+/// about which way an outer contour runs: TrueType clockwise, PostScript
+/// counter-clockwise. Fill is unaffected by a global flip -- the rule is symmetric -- but
+/// a font whose contours run against its format's convention confuses tools that read
+/// direction as meaning, and the hinting engines were written around it.
+fn union_nonzero(contours: &[BezPath], outer_clockwise: bool) -> Result<Vec<BezPath>, SliceError> {
+    let mut subject = BezPath::new();
+    for contour in contours {
+        subject.extend(contour.iter());
     }
 
-    (start, segments)
-}
+    let merged = binary_op(
+        &subject,
+        &BezPath::new(),
+        FillRule::NonZero,
+        BinaryOp::Union,
+    )
+    .map_err(|e| SliceError::RemoveOverlaps {
+        glyph: String::from("(unknown)"),
+        reason: format!("the sweep line failed: {e:?}"),
+    })?;
 
-/// Merge a glyph's contours under the non-zero winding rule.
-///
-/// `flo_curves` ships `path_remove_interior_points`, which looks like the right function
-/// and is not: `GraphPath::from_path` reverses any anti-clockwise contour to clockwise
-/// before building the graph, so by the time the winding is counted every contour turns
-/// the same way and nothing can cancel. Run an 'o' through it and the counter is gone.
-///
-/// The ray-casting pass underneath it, though, keeps a *signed* crossing count per path
-/// label and lets the caller decide what "inside" means. So: give every contour its own
-/// label, remember which ones `from_path` reversed, and add the crossings back up with
-/// those reversals undone. That total is the true winding number, and testing it against
-/// zero is the non-zero rule.
-///
-/// A global sign flip would not matter here — `total != 0` is symmetric — so it is
-/// enough that contours which turn opposite ways get opposite signs.
-fn union_nonzero(contours: &[BezPath], outer_clockwise: bool) -> Vec<BezPath> {
-    use flo_curves::bezier::path::{GraphPath, PathLabel};
-
-    let flo: Vec<SimpleBezierPath> = contours.iter().map(bezpath_to_flo).collect();
-
-    // kurbo's signed area is positive for an anti-clockwise contour, which is exactly
-    // the set `from_path` reverses.
-    let signs: Vec<i32> = contours
-        .iter()
-        .map(|c| if c.area() < 0.0 { 1 } else { -1 })
-        .collect();
-
-    let mut graph: GraphPath<Coord2, PathLabel> = GraphPath::new();
-    graph = graph.merge(GraphPath::from_merged_paths(
-        flo.iter()
-            .enumerate()
-            .map(|(i, path)| (path, PathLabel(i as u32))),
-    ));
-
-    graph.self_collide(BOOLEAN_ACCURACY);
-    graph.round(BOOLEAN_ACCURACY);
-
-    graph.set_edge_kinds_by_ray_casting(|crossings| {
-        let mut winding = 0i32;
-        for (index, &count) in crossings.iter().enumerate() {
-            winding += signs.get(index).copied().unwrap_or(0) * count;
+    // Depth is the length of the parent chain: even is an outer contour, odd is a hole.
+    let depth_of = |mut index: ContourIdx| {
+        let mut depth = 0;
+        while let Some(parent) = merged[index].parent {
+            depth += 1;
+            index = parent;
+            // A cycle cannot arise from a correct sweep, but a bound here is cheap and
+            // turns a hypothetical hang into a wrong answer that a test can catch.
+            if depth > merged.contours().count() {
+                break;
+            }
         }
-        winding != 0
-    });
-    graph.heal_exterior_gaps();
+        depth
+    };
 
-    let merged: Vec<SimpleBezierPath> = graph.exterior_paths();
-    orient_for_nonzero(merged.iter().map(flo_to_bezpath).collect(), outer_clockwise)
-}
-
-/// Re-wind merged contours so that the non-zero winding rule fills the right region.
-///
-/// `flo_curves` returns its result as an *even-odd* set: the contours are all wound the
-/// same way, and a hole is a hole because it is nested inside another contour, not
-/// because it runs the other way round. `glyf` is filled with the non-zero rule, under
-/// which that set would have every counter filled in solid — an 'o' would come out as a
-/// blob.
-///
-/// Converting between the two is a matter of orientation: a contour nested an even
-/// number of deep is an outer contour, an odd number deep is a hole, and the two must be
-/// wound in opposite directions. Which way round the pair goes is a convention, and the
-/// two outline formats disagree: TrueType runs outer contours clockwise, PostScript and
-/// therefore CFF runs them counter-clockwise. `outer_clockwise` picks. Fill is unaffected
-/// either way -- the non-zero rule is symmetric under a global flip -- but a font whose
-/// contours run against its format's convention confuses tools that read direction as
-/// meaning, and the hinting engines were written around it.
-fn orient_for_nonzero(paths: Vec<BezPath>, outer_clockwise: bool) -> Vec<BezPath> {
-    let probes: Vec<Option<Point>> = paths.iter().map(boundary_point).collect();
-
-    paths
-        .iter()
+    Ok(merged
+        .contours()
         .enumerate()
-        .map(|(i, path)| {
-            let depth = match probes[i] {
-                None => 0,
-                Some(point) => paths
-                    .iter()
-                    .enumerate()
-                    .filter(|(j, other)| *j != i && other.winding(point) != 0)
-                    .count(),
-            };
-            let want_clockwise = (depth % 2 == 0) == outer_clockwise;
+        .map(|(i, contour)| {
+            let want_clockwise = (depth_of(ContourIdx(i)) % 2 == 0) == outer_clockwise;
             // kurbo's signed area is positive for a counter-clockwise contour.
-            let is_clockwise = path.area() < 0.0;
+            let is_clockwise = contour.path.area() < 0.0;
             if is_clockwise == want_clockwise {
-                path.clone()
+                contour.path.clone()
             } else {
-                reverse_contour(path)
+                reverse_contour(&contour.path)
             }
         })
-        .collect()
-}
-
-/// A point on a contour's own outline, used to work out how deeply it is nested.
-///
-/// A point *inside* the contour will not do. The natural choice, the centre of the
-/// bounding box, sits inside the counter for a glyph like 'o', which makes the outer
-/// contour look one level deeper than it is and leaves the counter filled. A point on
-/// the boundary is inside every contour that encloses this one and outside every contour
-/// nested within it, which is exactly the containment relation nesting depth needs.
-///
-/// The midpoint of the longest segment is used, since that is the least likely to sit
-/// exactly on top of a neighbouring contour where the winding would be ambiguous.
-fn boundary_point(path: &BezPath) -> Option<Point> {
-    let mut best: Option<(f64, Point)> = None;
-    for segment in path.segments() {
-        let start = segment.eval(0.0);
-        let end = segment.eval(1.0);
-        let length = (end - start).hypot();
-        let midpoint = segment.eval(0.5);
-        if best.map(|(l, _)| length > l).unwrap_or(true) {
-            best = Some((length, midpoint));
-        }
-    }
-    best.map(|(_, point)| point)
+        .collect())
 }
 
 /// Reverse a closed contour's direction, keeping its start point.
@@ -753,21 +660,6 @@ fn reverse_contour(path: &BezPath) -> BezPath {
             points[index - 1].2
         };
         out.curve_to(c2, c1, segment_start);
-    }
-    out.close_path();
-    out
-}
-
-fn flo_to_bezpath(path: &SimpleBezierPath) -> BezPath {
-    let (start, segments) = path;
-    let mut out = BezPath::new();
-    out.move_to(Point::new(start.0, start.1));
-    for (c1, c2, end) in segments {
-        out.curve_to(
-            Point::new(c1.0, c1.1),
-            Point::new(c2.0, c2.1),
-            Point::new(end.0, end.1),
-        );
     }
     out.close_path();
     out
@@ -925,7 +817,7 @@ mod tests {
     }
 
     fn union(paths: &[BezPath]) -> Vec<BezPath> {
-        union_nonzero(paths, true)
+        union_nonzero(paths, true).expect("the sweep line should handle these fixtures")
     }
 
     /// Sample a grid and confirm two path sets fill exactly the same points.
@@ -1112,34 +1004,6 @@ mod tests {
             !contours_can_overlap(&[a, b]),
             "contours with disjoint bounding boxes cannot overlap"
         );
-    }
-
-    #[test]
-    fn quadratic_to_cubic_elevation_is_exact() {
-        let mut path = BezPath::new();
-        path.move_to((0.0, 0.0));
-        path.quad_to((50.0, 100.0), (100.0, 0.0));
-        path.close_path();
-
-        let flo = bezpath_to_flo(&path);
-        let back = flo_to_bezpath(&flo);
-
-        // Sample both curves; elevation introduces no error.
-        let original = kurbo::QuadBez::new(
-            Point::new(0.0, 0.0),
-            Point::new(50.0, 100.0),
-            Point::new(100.0, 0.0),
-        );
-        let elevated = match back.elements()[1] {
-            PathEl::CurveTo(c1, c2, p) => CubicBez::new(Point::new(0.0, 0.0), c1, c2, p),
-            other => panic!("expected a cubic, got {other:?}"),
-        };
-        for step in 0..=20 {
-            let t = step as f64 / 20.0;
-            let a = original.eval(t);
-            let b = elevated.eval(t);
-            assert!((a - b).hypot() < 1e-9, "at t={t}: {a:?} vs {b:?}");
-        }
     }
 
     #[test]

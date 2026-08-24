@@ -15,8 +15,8 @@ rust-version = "1.85"
 read-fonts = "0.43"
 write-fonts = { version = "0.52", features = ["read"] }
 skrifa = "0.46"
-kurbo = "0.11"
-flo_curves = "0.8"
+kurbo = "0.13"
+linesweeper = "0.4"
 thiserror = "2"
 log = "0.4"
 # WOFF2: `wuff` decodes, `brotli` compresses. Both are pure Rust, so the wasm build

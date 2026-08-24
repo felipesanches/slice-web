@@ -65,7 +65,7 @@ Two things are different.
 applications is still poor. A sliced instance whose stems overlap shows seams when
 outlined, misbehaves under boolean operations, and exports badly. fontTools does this
 through Skia's path ops, which has no WebAssembly build, so the union here is done with
-`flo_curves` — see [Overlap removal](#overlap-removal), which is the most interesting
+`linesweeper` — see [Overlap removal](#overlap-removal), which is the most interesting
 part of this repository.
 
 **It runs in a browser.** No install, no Python environment, no platform builds to code
@@ -206,29 +206,36 @@ system as Light — and Recursive's `rvrn` feature never being resolved, so slic
 
 ## Overlap removal
 
-The interesting part, and the one worth reading the code for.
+The union is done by [`linesweeper`](https://crates.io/crates/linesweeper), a robust
+Bentley–Ottmann sweep line over Bézier paths, in pure Rust. fontTools delegates this to
+Skia's path ops through `skia-pathops`, which has no WebAssembly build.
 
-`flo_curves` ships `path_remove_interior_points`, which looks like exactly the right
-function and is not. `GraphPath::from_path` reverses every anti-clockwise contour to
-clockwise before building its graph, so by the time winding is counted nothing can
-cancel out. Run an `o` through it and the counter fills in solid.
+The whole operation is one call — the union of the glyph with nothing, under the non-zero
+rule, is the glyph normalised — and the result comes back as contours with an explicit
+`parent`, so which ones are holes is read off the tree rather than recovered from
+geometry.
 
-The ray-casting pass underneath it, though, keeps a *signed* crossing count per path
-label, and lets the caller decide what "inside" means. So each contour gets its own
-label, the reversals `from_path` performed are recorded, and the crossings are summed
-with those reversals undone. That total is the true winding number, and testing it
-against zero is the non-zero rule that `glyf` is defined in terms of.
+That is worth saying because the first implementation used `flo_curves` and was three
+times the size. `flo_curves` ships `path_remove_interior_points`, which looks like exactly
+the right function and is not: `GraphPath::from_path` reverses every anti-clockwise
+contour to clockwise before building its graph, so by the time winding is counted nothing
+can cancel out, and an `o` comes back with its counter filled in solid. Driving the ray
+caster underneath it worked — label each contour, record the reversals, sum the crossings
+with them undone — but it also meant reconstructing nesting depth afterwards by
+ray-casting a point on each contour's own boundary, since `flo_curves` returns an
+*even-odd* set with every contour turning the same way. Switching engines deleted 134
+lines and 17 crates.
 
-`flo_curves` then hands back its result as an *even-odd* set, with every contour turning
-the same way — which `glyf` would fill solid all over again. So the contours are re-wound
-by nesting depth, measured from a point on each contour's own boundary. Not from inside
-it: the bounding-box centre of an `o` sits inside its own counter, which makes the outer
-contour look one level deeper than it is.
+Depth still has to become a direction, because `glyf` and `CFF` are both filled with the
+non-zero rule and disagree about which way an outer contour runs: TrueType clockwise,
+PostScript counter-clockwise. Fill is unaffected by a global flip, but a font whose
+contours run against its format's convention confuses tools that read direction as
+meaning.
 
 Tested against a counter, a counter inside a counter (a circled letter — the case that
 rules out the tempting shortcut of unioning the outer-wound contours and subtracting the
 inner-wound ones), overlapping rings, same-direction nesting, and a self-intersecting bow
-tie.
+tie. `tools/overlap-engine-eval/` is the harness the engine choice was measured with.
 
 ## Where it deliberately differs from the original
 

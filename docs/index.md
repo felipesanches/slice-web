@@ -56,7 +56,9 @@ Foundry. The interface is deliberately close, because the original's interface i
 people know it. Four things are different.
 
 **It removes overlaps.** The original never did. fontTools does this through Skia's path
-ops, which has no WebAssembly build, so the union here is computed with `flo_curves`.
+ops, which has no WebAssembly build, so the union here is computed with
+[`linesweeper`](https://crates.io/crates/linesweeper), a robust Bentley–Ottmann sweep
+line in pure Rust.
 
 **It runs in a browser.** No install, no Python environment, no platform builds to code
 sign and notarise.

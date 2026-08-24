@@ -355,7 +355,7 @@ in the repository.
 Slice is a reimplementation of [Slice](https://github.com/source-foundry/Slice) by Source
 Foundry, which is the program this one is measured against throughout. The font engine is
 built on the [fontations](https://github.com/googlefonts/fontations) crates; overlap
-removal uses [flo_curves](https://github.com/Logicalshift/flo_curves) and
+removal uses [linesweeper](https://crates.io/crates/linesweeper) and
 [kurbo](https://github.com/linebender/kurbo); the interface is
 [Leptos](https://leptos.dev).
 

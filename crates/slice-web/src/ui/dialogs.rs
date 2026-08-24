@@ -111,10 +111,10 @@ pub fn AboutDialog(state: AppState) -> impl IntoView {
                             " — read-fonts, write-fonts and skrifa"
                         </li>
                         <li>
-                            <a href="https://github.com/Logicalshift/flo_curves" target="_blank" rel="noreferrer">
-                                "flo_curves"
+                            <a href="https://crates.io/crates/linesweeper" target="_blank" rel="noreferrer">
+                                "linesweeper"
                             </a>
-                            " — Bézier path arithmetic, for overlap removal"
+                            " — a robust sweep line, for overlap removal"
                         </li>
                         <li>
                             <a href="https://github.com/linebender/kurbo" target="_blank" rel="noreferrer">
