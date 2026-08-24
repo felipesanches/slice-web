@@ -1,6 +1,10 @@
 /target
 /tools/woff2-decoder-eval/target
 /dist
+
+# Built by .github/workflows/pages.yml and copied into the site at deploy time.
+# A committed copy is a build artefact that goes stale with no way to tell by looking.
+/docs/app
 **/*.rs.bk
 Cargo.lock.orig
 .DS_Store

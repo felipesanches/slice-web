@@ -47,7 +47,7 @@ HERE = Path(__file__).resolve().parent
 SOURCE = HERE / "manual.md"
 TEX = HERE / "slice-manual.tex"
 PDF = HERE / "slice-manual.pdf"
-PAGE = HERE.parent / "index.md"
+PAGE = HERE / "index.md"   # rendered at /manual/ beside the PDF
 
 
 # ----------------------------------------------------------------------- the parser
@@ -371,14 +371,19 @@ def to_page(meta: dict, source: str) -> str:
     if body.startswith("# "):
         body = body.split("\n", 1)[1].lstrip("\n")
 
+    def quoted(value: str) -> str:
+        # Titles contain colons, which are not a scalar YAML will accept unquoted.
+        return '"' + value.replace('"', '\\"') + '"'
+
     front = [
         "---",
         "layout: default",
-        f'title: {meta.get("title", "Slice — User\'s Manual")}',
-        f'description: {meta.get("subtitle", "")}',
+        "permalink: /manual/",
+        f'title: {quoted(meta.get("title", "Slice — User\'s Manual"))}',
+        f'description: {quoted(meta.get("subtitle", ""))}',
         "---",
         "",
-        "*Also available as a [PDF](manual/slice-manual.pdf).*",
+        "*Also available as a [PDF](slice-manual.pdf).*",
         "",
         "",
     ]

@@ -29,7 +29,7 @@ or the original has a defect and this implementation must not copy it.
 Each case names a fixture font, some editor input, and a list of things that must
 be true of the result — or, for a bad input, the refusal that must come back. Each
 also carries the behavioural claims it covers, from
-[the behaviour map](original-behaviour.md), and a rationale saying why that is the
+[the behaviour map](original-behaviour.html), and a rationale saying why that is the
 right answer.
 
 Every case is labelled with where its authority comes from:

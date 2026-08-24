@@ -150,7 +150,9 @@ def render(cases: list[dict]) -> str:
     w("Each case names a fixture font, some editor input, and a list of things that must")
     w("be true of the result — or, for a bad input, the refusal that must come back. Each")
     w("also carries the behavioural claims it covers, from")
-    w("[the behaviour map](original-behaviour.md), and a rationale saying why that is the")
+    # `.html`, not `.md`: Jekyll renders the sibling page to that extension, and
+    # GitHub resolves a link to it in the repository view either way.
+    w("[the behaviour map](original-behaviour.html), and a rationale saying why that is the")
     w("right answer.")
     w("")
     w("Every case is labelled with where its authority comes from:")

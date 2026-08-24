@@ -1,17 +1,31 @@
 title: Slice
 description: Build custom design sub-spaces from variable fonts, in the browser
-theme: jekyll-theme-cayman
+repository: https://github.com/felipesanches/slice-web
+url: https://felipesanches.github.io
+baseurl: /slice-web
+
+# No theme gem. The layout in `_layouts/` and the stylesheet in `assets/` are the
+# application's own palette and type stack, so the docs and the tool look like one
+# thing -- and the site has no dependency that can fail to resolve on the build machine.
+
+nav:
+  - name: Manual
+    url: /manual/
+  - name: Install
+    url: /install/
+  - name: Evidence
+    url: /evidence/
+  - name: Developer
+    url: /developer/
 
 # The manual is generated. `manual.md` is its source and `slice-manual.tex` an
-# intermediate; publishing either alongside the rendered `index.md` would put three
-# copies of the same text on the site. The PDF in that directory is kept, because
-# index.md links to it.
+# intermediate; publishing either alongside the rendered page would put three copies of
+# the same text on the site. The PDF is kept, because the manual links to it.
 exclude:
   - manual/manual.md
   - manual/build.py
   - manual/slice-manual.tex
 
-# `app/` is the compiled WebAssembly build, copied in after Jekyll has run. Naming it
-# here stops Jekyll from deleting it if it ever runs over a directory that has one.
+# `app/` is the compiled WebAssembly build, copied in after Jekyll has run.
 keep_files:
   - app

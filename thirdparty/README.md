@@ -1,5 +1,13 @@
 # Third-party licences
 
+## The Slice icon
+
+`docs/assets/slice-icon.svg` is the original Slice project's icon, carried over so that
+this version is recognisable as the same tool. It is itself a derivative of the
+["cheesecake" icon](https://www.flaticon.com/free-icon/cheesecake_3400263) released by
+flaticon.com, used under the Flaticon license, which permits commercial and personal use,
+modification and derivative works. See [Flaticon-License.txt](Flaticon-License.txt).
+
 ## Recursive
 
 `web/fonts/RecursiveSans-Slice_mod.subset.ttf` and the fonts in `testdata/fonts/` are

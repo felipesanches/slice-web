@@ -24,23 +24,33 @@ and handed straight back as a download. There is no server, and nothing to uploa
 
 ## Documentation
 
+Everything is at **[felipesanches.github.io/slice-web](https://felipesanches.github.io/slice-web/)**.
+
 | | |
 |---|---|
 | **[The application](https://felipesanches.github.io/slice-web/app/)** | Slice itself, running. Built from `main` by CI, not committed |
-| **[User's manual](https://felipesanches.github.io/slice-web/)** | How to use Slice, start to finish: the three editors, the axis syntax, overlap removal, the command line, and what every error message means |
-| [User's manual (PDF)](docs/manual/slice-manual.pdf) | The same manual, typeset — 10 pages |
+| **[User's manual](https://felipesanches.github.io/slice-web/manual/)** | The whole tool: the three editors, the axis syntax, overlap removal, the command line, and what every error message means. Also a [PDF](docs/manual/slice-manual.pdf) |
+| [Install](https://felipesanches.github.io/slice-web/install/) | Nothing for the browser; one cargo build for the command line |
+| [Developer](https://felipesanches.github.io/slice-web/developer/) | Building, testing, the code layout, and how to contribute |
+| [Licences](https://felipesanches.github.io/slice-web/license/) | The application, the documentation and the third-party work |
+| [Evidence](https://felipesanches.github.io/slice-web/evidence/) | What is tested, how it was measured, and what is still unknown |
+
+The four evidence documents, also readable in the repository:
+
+| | |
+|---|---|
 | [Test suite in plain English](docs/test-suite.md) | All 297 conformance cases and the reasoning behind each |
 | [Adjudication](docs/adjudication.md) | Every case the original Slice fails, and the measurement behind each verdict |
 | [Real-world sweep](docs/real-world-sweep.md) | What happens on 775 real variable fonts from Google Fonts |
-| [Behaviour map](docs/original-behaviour.md) | The numbered map of the original program that the suite is written against |
+| [Behaviour map](docs/original-behaviour.md) | The numbered map of the original that the suite is written against |
 | [How the corpus works](tests/suite/README.md) | Writing a case, the check kinds, the fixtures |
 | [Probes and harnesses](tools/README.md) | The scripts behind every measured number in these documents |
 
 The manual is generated from a single source: edit `docs/manual/manual.md` and run
-`docs/manual/build.py`, which writes the LaTeX, the PDF and the GitHub Pages copy together
-so they cannot drift apart. `docs/manual/build.py --check` says whether the committed
-outputs are current; it is a local step and CI does not run it, so that building the
-manual never becomes a reason for the build machine to carry a TeX installation.
+`docs/manual/build.py`, which writes the LaTeX, the PDF and the website copy together so
+they cannot drift apart. `docs/manual/build.py --check` says whether the committed outputs
+are current; it is a local step and CI does not run it, so that building the manual never
+becomes a reason for the build machine to carry a TeX installation.
 
 ## Why
 

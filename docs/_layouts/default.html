@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% if page.title and page.url != "/" %}{{ page.title }} · {{ site.title }}{% else %}{{ site.title }} — {{ site.description }}{% endif %}</title>
+{% if page.description %}<meta name="description" content="{{ page.description }}">{% endif %}
+<link rel="icon" href="{{ '/assets/slice-icon.svg' | relative_url }}">
+<link rel="stylesheet" href="{{ '/assets/docs.css' | relative_url }}">
+</head>
+<body>
+
+<header class="masthead">
+  <a class="brand" href="{{ '/' | relative_url }}">
+    <img src="{{ '/assets/slice-icon.svg' | relative_url }}" alt="" width="44" height="35">
+    <span>{{ site.title }}</span>
+  </a>
+  <nav>
+    {%- for item in site.nav %}
+    <a href="{{ item.url | relative_url }}"{% if page.url == item.url %} aria-current="page"{% endif %}>{{ item.name }}</a>
+    {%- endfor %}
+    <a class="cta" href="{{ '/app/' | relative_url }}">Try it</a>
+  </nav>
+</header>
+
+<main>
+  {% if page.title and page.url != "/" %}
+  <h1>{{ page.title }}</h1>
+  {% if page.description %}<p class="lede">{{ page.description }}</p>{% endif %}
+  {% endif %}
+  {{ content }}
+</main>
+
+<footer>
+  <p>
+    <a href="{{ site.repository }}">Source on GitHub</a> ·
+    <a href="{{ site.repository }}/issues">Report an issue</a> ·
+    <a href="{{ '/license/' | relative_url }}">Licences</a>
+  </p>
+  <p class="small">
+    A reimplementation of <a href="https://github.com/source-foundry/Slice">Slice</a> by
+    Source Foundry. Both are free software under the GNU General Public License v3.
+  </p>
+</footer>
+
+</body>
+</html>
